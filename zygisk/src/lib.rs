@@ -125,8 +125,8 @@ impl ZygiskModule for VpnHide {
             Ok(()) => {
                 info!("hooks installed (inline libc!ioctl + getifaddrs + openat for proc/net/*)");
                 // Erase shadowhook's fingerprints from /proc/self/maps
-                // before any anti-tamper SDK (e.g. MIR HCE) gets a
-                // chance to scan them via raw syscalls.
+                // before any anti-tamper SDK gets a chance to scan
+                // them via raw syscalls.
                 scrub_shadowhook_maps();
             }
             Err(err) => error!("install_hooks failed: {err}"),
@@ -213,10 +213,10 @@ fn hook_libc_sym(
 ///   - `[anon:shadowhook-island]`  — trampoline island
 ///   - `[anon:shadowhook-enter]`   — hook entry stubs
 ///
-/// Anti-tamper SDKs (notably MIR HCE from NSPK, used in Russian banking
-/// apps) read `/proc/self/maps` via raw `svc #0` syscalls — completely
-/// bypassing any libc hook we could place — and scan for known hooking
-/// framework names. If they see "shadowhook" they abort the process.
+/// Some anti-tamper SDKs read `/proc/self/maps` via raw `svc #0`
+/// syscalls — completely bypassing any libc hook we could place — and
+/// scan for known hooking framework names. If they see "shadowhook"
+/// they abort the process.
 ///
 /// Fix: rename those regions to an empty string via `prctl(PR_SET_VMA,
 /// PR_SET_VMA_ANON_NAME, ...)`. The kernel updates the name in its VMA
@@ -226,7 +226,7 @@ fn hook_libc_sym(
 /// any Android process.
 ///
 /// Must be called immediately after `install_hooks()` — before the app's
-/// ContentProviders are initialized (which is where MIR SDK runs).
+/// ContentProviders are initialized.
 fn scrub_shadowhook_maps() {
     let names_to_scrub: &[&str] = &["shadowhook-island", "shadowhook-enter"];
     let maps = match fs::read_to_string("/proc/self/maps") {

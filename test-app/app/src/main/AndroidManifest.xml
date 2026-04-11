@@ -7,7 +7,7 @@
     <application
         android:allowBackup="false"
         android:label="VPNHide Test"
-        android:theme="@style/AppTheme">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
             android:name=".MainActivity"

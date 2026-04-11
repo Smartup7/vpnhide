@@ -8,13 +8,12 @@ Hide an active Android VPN connection from selected apps. Three components work 
 |-----------|------|-----|
 | **[zygisk/](zygisk/)** | Zygisk module (Rust) | Inline-hooks `libc.so` via [shadowhook](https://github.com/nicknisi/nicknisi): `ioctl`, `getifaddrs`, `openat` (`/proc/net/*`), `recvmsg` (netlink). Catches every caller regardless of load order — including Flutter/Dart and late-loaded native libs. |
 | **[lsposed/](lsposed/)** | LSPosed/Xposed module (Kotlin) | Hooks Java network APIs in app processes (`NetworkCapabilities`, `NetworkInterface`, `LinkProperties`, etc.) and `writeToParcel` in `system_server` for cross-process Binder filtering. |
-| **[kmod/](kmod/)** | Kernel module (C) | `kretprobe` hooks on `dev_ioctl`, `rtnl_fill_ifinfo`, `fib_route_seq_show`. Invisible to any userspace anti-tamper SDK — including MIR HCE (Russian banking NFC payments). |
+| **[kmod/](kmod/)** | Kernel module (C) | `kretprobe` hooks on `dev_ioctl`, `rtnl_fill_ifinfo`, `fib_route_seq_show`. Invisible to any userspace anti-tamper SDK. |
 
 ## Which modules do I need?
 
-- **Most apps** (Шоколадница, Flutter apps, simple VPN checks): `zygisk` alone is enough.
-- **Apps using Java network APIs** (connectivity checks via `NetworkCapabilities`): add `lsposed`.
-- **Banking apps with MIR SDK** (Alfa-Bank, T-Bank, Yandex Bank): use `kmod` + `lsposed`. These apps detect userspace hooks via raw `svc #0` syscalls and ELF integrity checks — only kernel-level filtering is invisible to them.
+- **Most apps**: `zygisk` + `lsposed`. Almost all apps check VPN status through Java network APIs (`NetworkCapabilities`, `NetworkInterface`, etc.), so both modules are needed for full coverage.
+- **Apps with aggressive anti-tamper SDKs**: use `kmod` + `lsposed`. Some SDKs detect userspace hooks via raw `svc #0` syscalls and ELF integrity checks — only kernel-level filtering is invisible to them.
 
 ## Configuration
 
@@ -33,9 +32,10 @@ Each component has its own build system:
 
 ## Verified against
 
-- **RKNHardering** — all detection vectors clean
-- **YourVPNDead** — all detection vectors clean
-- Both implement the official Russian Ministry of Digital Development VPN/proxy detection methodology.
+- [RKNHardering](https://github.com/xtclovver/RKNHardering/) — all detection vectors clean
+- [YourVPNDead](https://github.com/loop-uh/yourvpndead) — all detection vectors clean
+
+Both implement the official Russian Ministry of Digital Development VPN/proxy detection methodology.
 
 ## Split tunneling
 
@@ -45,4 +45,4 @@ Works correctly with split-tunnel VPN configurations. Only the apps in the targe
 
 - `kmod` requires a GKI kernel with `CONFIG_KPROBES=y` (standard on Pixel 6–9a with `android14-6.1`)
 - `lsposed` requires LSPosed or a compatible Xposed framework
-- MIR SDK's custom VM bytecode engine could theoretically be updated to detect kernel-level filtering, but this hasn't been observed in practice
+- Some anti-tamper SDKs could theoretically be updated to detect kernel-level filtering, but this hasn't been observed in practice

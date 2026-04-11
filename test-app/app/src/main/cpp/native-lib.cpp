@@ -19,7 +19,7 @@
 #define TAG "VPNHideTest"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 
-static const char* VPN_PREFIXES[] = {"tun", "wg", "ppp", "tap"};
+static const char* VPN_PREFIXES[] = {"tun", "wg", "ppp", "tap", "ipsec", "xfrm"};
 static const int NUM_PREFIXES = sizeof(VPN_PREFIXES) / sizeof(VPN_PREFIXES[0]);
 
 static bool is_vpn_iface(const char* name) {
@@ -28,6 +28,7 @@ static bool is_vpn_iface(const char* name) {
             return true;
         }
     }
+    if (strstr(name, "vpn") || strstr(name, "VPN")) return true;
     return false;
 }
 
@@ -38,9 +39,12 @@ static jstring to_jstring(JNIEnv* env, const std::string& s) {
 // 1. ioctl SIOCGIFFLAGS on tun0
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifflags(JNIEnv* env, jobject) {
+    LOGI("=== CHECK: ioctl SIOCGIFFLAGS on tun0 ===");
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
-        return to_jstring(env, "FAIL: cannot create socket: " + std::string(strerror(errno)));
+        std::string r = "FAIL: cannot create socket: " + std::string(strerror(errno));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
 
     struct ifreq ifr{};
@@ -50,24 +54,33 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifflags(JNIEnv* env,
     int err = errno;
     close(fd);
 
-    if (ret < 0 && err == ENODEV) {
-        LOGI("SIOCGIFFLAGS tun0: ENODEV (hooked or no VPN)");
-        return to_jstring(env, "PASS");
-    } else if (ret == 0) {
-        LOGI("SIOCGIFFLAGS tun0: succeeded (flags=0x%x) - VPN visible!", ifr.ifr_flags);
-        return to_jstring(env, "FAIL: tun0 exists (flags=0x" +
-            std::to_string(ifr.ifr_flags) + ")");
+    std::string result;
+    if (ret < 0) {
+        if (err == ENODEV) {
+            result = "PASS: ioctl(tun0, SIOCGIFFLAGS) returned ENODEV — interface not visible";
+        } else if (err == ENXIO) {
+            result = "PASS: ioctl(tun0, SIOCGIFFLAGS) returned ENXIO — interface not visible";
+        } else {
+            result = "FAIL: ioctl returned error " + std::to_string(err) + " (" + strerror(err) + ")";
+        }
     } else {
-        return to_jstring(env, "FAIL: ioctl error: " + std::string(strerror(err)));
+        result = "FAIL: tun0 is visible! flags=0x" + std::to_string(ifr.ifr_flags) +
+                 " (IFF_UP=" + std::to_string(!!(ifr.ifr_flags & IFF_UP)) +
+                 ", IFF_RUNNING=" + std::to_string(!!(ifr.ifr_flags & IFF_RUNNING)) + ")";
     }
+    LOGI("RESULT: %s", result.c_str());
+    return to_jstring(env, result);
 }
 
 // 2. ioctl SIOCGIFCONF - enumerate interfaces
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifconf(JNIEnv* env, jobject) {
+    LOGI("=== CHECK: ioctl SIOCGIFCONF enumeration ===");
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
-        return to_jstring(env, "FAIL: cannot create socket: " + std::string(strerror(errno)));
+        std::string r = "FAIL: cannot create socket: " + std::string(strerror(errno));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
 
     char buf[4096];
@@ -78,65 +91,95 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifconf(JNIEnv* env, 
     if (ioctl(fd, SIOCGIFCONF, &ifc) < 0) {
         int err = errno;
         close(fd);
-        return to_jstring(env, "FAIL: ioctl error: " + std::string(strerror(err)));
+        std::string r = "FAIL: ioctl error: " + std::string(strerror(err));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
     close(fd);
 
-    std::vector<std::string> vpn_found;
     struct ifreq* it = ifc.ifc_req;
     int count = ifc.ifc_len / sizeof(struct ifreq);
+    std::vector<std::string> all_ifaces;
+    std::vector<std::string> vpn_found;
 
     for (int i = 0; i < count; i++) {
         const char* name = it[i].ifr_name;
-        LOGI("SIOCGIFCONF: found interface '%s'", name);
+        all_ifaces.push_back(name);
+        LOGI("  SIOCGIFCONF: interface '%s'", name);
         if (is_vpn_iface(name)) {
             vpn_found.push_back(name);
         }
     }
 
+    std::string all_list;
+    for (auto& n : all_ifaces) { if (!all_list.empty()) all_list += ", "; all_list += n; }
+
+    std::string result;
     if (vpn_found.empty()) {
-        return to_jstring(env, "PASS");
+        result = "PASS: " + std::to_string(count) + " interfaces visible: [" + all_list + "], none are VPN";
+    } else {
+        std::string vpn_list;
+        for (auto& n : vpn_found) { if (!vpn_list.empty()) vpn_list += ", "; vpn_list += n; }
+        result = "FAIL: VPN interfaces found: [" + vpn_list + "] in full list: [" + all_list + "]";
     }
-    std::string detail = "FAIL: VPN interfaces found:";
-    for (auto& n : vpn_found) detail += " " + n;
-    return to_jstring(env, detail);
+    LOGI("RESULT: %s", result.c_str());
+    return to_jstring(env, result);
 }
 
 // 3. getifaddrs
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkGetifaddrs(JNIEnv* env, jobject) {
+    LOGI("=== CHECK: getifaddrs() enumeration ===");
     struct ifaddrs* addrs = nullptr;
     if (getifaddrs(&addrs) != 0) {
-        return to_jstring(env, "FAIL: getifaddrs error: " + std::string(strerror(errno)));
+        std::string r = "FAIL: getifaddrs error: " + std::string(strerror(errno));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
 
+    std::vector<std::string> all_ifaces;
     std::vector<std::string> vpn_found;
     for (struct ifaddrs* ifa = addrs; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_name) {
-            LOGI("getifaddrs: found interface '%s'", ifa->ifa_name);
-            if (is_vpn_iface(ifa->ifa_name)) {
-                // Deduplicate
-                bool dup = false;
-                for (auto& n : vpn_found) if (n == ifa->ifa_name) { dup = true; break; }
-                if (!dup) vpn_found.push_back(ifa->ifa_name);
-            }
+        if (!ifa->ifa_name) continue;
+        // Deduplicate for display
+        bool seen = false;
+        for (auto& n : all_ifaces) if (n == ifa->ifa_name) { seen = true; break; }
+        if (!seen) {
+            all_ifaces.push_back(ifa->ifa_name);
+            LOGI("  getifaddrs: interface '%s' (family=%d, flags=0x%x)",
+                 ifa->ifa_name, ifa->ifa_addr ? ifa->ifa_addr->sa_family : -1, ifa->ifa_flags);
+        }
+        if (is_vpn_iface(ifa->ifa_name)) {
+            bool dup = false;
+            for (auto& n : vpn_found) if (n == ifa->ifa_name) { dup = true; break; }
+            if (!dup) vpn_found.push_back(ifa->ifa_name);
         }
     }
     freeifaddrs(addrs);
 
+    std::string all_list;
+    for (auto& n : all_ifaces) { if (!all_list.empty()) all_list += ", "; all_list += n; }
+
+    std::string result;
     if (vpn_found.empty()) {
-        return to_jstring(env, "PASS");
+        result = "PASS: " + std::to_string(all_ifaces.size()) + " unique interfaces: [" + all_list + "], none are VPN";
+    } else {
+        std::string vpn_list;
+        for (auto& n : vpn_found) { if (!vpn_list.empty()) vpn_list += ", "; vpn_list += n; }
+        result = "FAIL: VPN interfaces: [" + vpn_list + "] in full list: [" + all_list + "]";
     }
-    std::string detail = "FAIL: VPN interfaces found:";
-    for (auto& n : vpn_found) detail += " " + n;
-    return to_jstring(env, detail);
+    LOGI("RESULT: %s", result.c_str());
+    return to_jstring(env, result);
 }
 
-// Helper: read a proc file and check for VPN interface lines
+// Helper: read a proc file and return detailed info
 static std::string check_proc_file(const char* path) {
+    LOGI("=== CHECK: %s (native read) ===", path);
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
-        return "FAIL: cannot open " + std::string(path) + ": " + strerror(errno);
+        std::string r = "FAIL: cannot open " + std::string(path) + ": " + strerror(errno);
+        LOGI("RESULT: %s", r.c_str());
+        return r;
     }
 
     char buf[8192];
@@ -148,6 +191,7 @@ static std::string check_proc_file(const char* path) {
     }
     close(fd);
 
+    int total_lines = 0;
     std::vector<std::string> vpn_lines;
     size_t pos = 0;
     while (pos < content.size()) {
@@ -155,22 +199,28 @@ static std::string check_proc_file(const char* path) {
         if (eol == std::string::npos) eol = content.size();
         std::string line = content.substr(pos, eol - pos);
         pos = eol + 1;
+        if (line.empty()) continue;
+        total_lines++;
 
-        // Check if line contains a VPN interface name
+        LOGI("  %s line: %s", path, line.substr(0, 120).c_str());
+
         for (int i = 0; i < NUM_PREFIXES; i++) {
             if (line.find(VPN_PREFIXES[i]) != std::string::npos) {
-                vpn_lines.push_back(line.substr(0, 40));
+                vpn_lines.push_back(line.substr(0, 80));
                 break;
             }
         }
     }
 
+    std::string result;
     if (vpn_lines.empty()) {
-        return "PASS";
+        result = "PASS: " + std::to_string(total_lines) + " lines in " + path + ", no VPN entries";
+    } else {
+        result = "FAIL: " + std::to_string(vpn_lines.size()) + " VPN lines in " + path + ":";
+        for (auto& l : vpn_lines) result += "\n  " + l;
     }
-    std::string detail = "FAIL: VPN lines found in " + std::string(path) + ":";
-    for (auto& l : vpn_lines) detail += "\n  " + l;
-    return detail;
+    LOGI("RESULT: %s", result.c_str());
+    return result;
 }
 
 // 4. /proc/net/route
@@ -188,9 +238,12 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetIfInet6(JNIEnv* env, jo
 // 6. Netlink RTM_GETLINK
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink(JNIEnv* env, jobject) {
+    LOGI("=== CHECK: netlink RTM_GETLINK dump ===");
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
     if (fd < 0) {
-        return to_jstring(env, "FAIL: cannot create netlink socket: " + std::string(strerror(errno)));
+        std::string r = "FAIL: cannot create netlink socket: " + std::string(strerror(errno));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
 
     struct sockaddr_nl sa{};
@@ -198,10 +251,11 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink(JNIEnv* env, jo
     if (bind(fd, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
         int err = errno;
         close(fd);
-        return to_jstring(env, "FAIL: bind error: " + std::string(strerror(err)));
+        std::string r = "FAIL: bind error: " + std::string(strerror(err));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
 
-    // Build RTM_GETLINK request
     struct {
         struct nlmsghdr nlh;
         struct ifinfomsg ifm;
@@ -216,11 +270,13 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink(JNIEnv* env, jo
     if (send(fd, &req, req.nlh.nlmsg_len, 0) < 0) {
         int err = errno;
         close(fd);
-        return to_jstring(env, "FAIL: send error: " + std::string(strerror(err)));
+        std::string r = "FAIL: send error: " + std::string(strerror(err));
+        LOGI("RESULT: %s", r.c_str());
+        return to_jstring(env, r);
     }
 
-    // Receive and parse
     char buf[32768];
+    std::vector<std::string> all_ifaces;
     std::vector<std::string> vpn_found;
     bool done = false;
 
@@ -232,14 +288,8 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink(JNIEnv* env, jo
              NLMSG_OK(nh, (size_t)len);
              nh = NLMSG_NEXT(nh, len)) {
 
-            if (nh->nlmsg_type == NLMSG_DONE) {
-                done = true;
-                break;
-            }
-            if (nh->nlmsg_type == NLMSG_ERROR) {
-                done = true;
-                break;
-            }
+            if (nh->nlmsg_type == NLMSG_DONE) { done = true; break; }
+            if (nh->nlmsg_type == NLMSG_ERROR) { done = true; break; }
             if (nh->nlmsg_type != RTM_NEWLINK) continue;
 
             struct ifinfomsg* ifi = (struct ifinfomsg*)NLMSG_DATA(nh);
@@ -249,7 +299,9 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink(JNIEnv* env, jo
             while (RTA_OK(rta, rta_len)) {
                 if (rta->rta_type == IFLA_IFNAME) {
                     const char* name = (const char*)RTA_DATA(rta);
-                    LOGI("netlink RTM_GETLINK: found interface '%s'", name);
+                    all_ifaces.push_back(name);
+                    LOGI("  netlink RTM_NEWLINK: interface '%s' (index=%d, flags=0x%x)",
+                         name, ifi->ifi_index, ifi->ifi_flags);
                     if (is_vpn_iface(name)) {
                         vpn_found.push_back(name);
                     }
@@ -258,13 +310,19 @@ Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink(JNIEnv* env, jo
             }
         }
     }
-
     close(fd);
 
+    std::string all_list;
+    for (auto& n : all_ifaces) { if (!all_list.empty()) all_list += ", "; all_list += n; }
+
+    std::string result;
     if (vpn_found.empty()) {
-        return to_jstring(env, "PASS");
+        result = "PASS: " + std::to_string(all_ifaces.size()) + " interfaces via netlink: [" + all_list + "], none are VPN";
+    } else {
+        std::string vpn_list;
+        for (auto& n : vpn_found) { if (!vpn_list.empty()) vpn_list += ", "; vpn_list += n; }
+        result = "FAIL: VPN interfaces: [" + vpn_list + "] in netlink dump: [" + all_list + "]";
     }
-    std::string detail = "FAIL: VPN interfaces found:";
-    for (auto& n : vpn_found) detail += " " + n;
-    return to_jstring(env, detail);
+    LOGI("RESULT: %s", result.c_str());
+    return to_jstring(env, result);
 }

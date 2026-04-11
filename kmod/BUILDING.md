@@ -281,7 +281,7 @@ adb push vpnhide-kmod.zip /sdcard/Download/
 - The target app's UID changes on reinstall — re-resolve via WebUI.
 
 **NFC payment broken with module active**
-- Remove the banking app from targets. The kernel module's ioctl
-  filtering can trigger MIR SDK's silent integrity degradation on
-  some apps. Use system_server hooks (vpnhide LSPosed) for Java-side
-  coverage instead.
+- Remove the target app from targets. The kernel module's ioctl
+  filtering can trigger some anti-tamper SDKs' silent integrity
+  degradation. Use system_server hooks (vpnhide LSPosed) for
+  Java-side coverage instead.

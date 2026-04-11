@@ -14,7 +14,7 @@ runtime code that never enters ART. The two modules are independent
 and share no runtime state; install either one alone, or both together
 for full coverage of the Java and native stacks.
 
-For banking apps with anti-tamper SDKs (MIR HCE) where userspace hooks
+For apps with aggressive anti-tamper SDKs where userspace hooks
 cause crashes or NFC payment degradation, use
 [okhsunrog/vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod)
 instead — a kernel module that provides the same native filtering
@@ -23,10 +23,9 @@ without any footprint in the app's process.
 ## Status
 
 Tested baseline: Android 16 (API 36) on a Pixel 8 Pro with KernelSU-Next
-+ NeoZygisk. Verified against `ru.plazius.shokoladnica` (the
-Flutter-based cafe loyalty app that motivated this module): the
-VPN-detection banner no longer appears when a WireGuard tunnel is
-active.
++ NeoZygisk. Verified against a Flutter-based app with native VPN
+detection: the VPN-detection banner no longer appears when a WireGuard
+tunnel is active.
 
 Should work on **any current Zygisk implementation** — see the
 [Compatibility](#compatibility) section below.
@@ -83,7 +82,7 @@ interfaces this module hooks and why.
 ### TODO — methodology coverage gaps (native side)
 
 The methodology mentions native paths that we don't yet hook. None of
-them are triggered by Шоколадница, RKNHardering or YourVPNDead today
+them are triggered by RKNHardering or YourVPNDead today
 (they're all Java-only callers, so the LSPosed companion already
 covers them at the ART layer), but the gaps matter for any future
 detector that drops into C/C++ / NDK code to bypass ART. Listed by
@@ -296,8 +295,8 @@ cargo ndk -t arm64-v8a build --release \
 6. Verify via `adb logcat | grep vpnhide-zygisk`. Expected lines:
 
    ```
-   I vpnhide-zygisk: is_targeted: matched shokoladnica (main)
-   I vpnhide-zygisk: pre_app_specialize: targeting ru.plazius.shokoladnica
+   I vpnhide-zygisk: is_targeted: matched com.example.targetapp (main)
+   I vpnhide-zygisk: pre_app_specialize: targeting com.example.targetapp
    E shadowhook_tag: shadowhook init(default_mode: UNIQUE, …), return: 0
    I vpnhide-zygisk: hooks installed (inline libc!ioctl)
    ```
@@ -333,9 +332,9 @@ list in the Kotlin companion module.
   `NetworkInterface.getNetworkInterfaces()`, and similar ART-side APIs
   are handled by the [Kotlin LSPosed companion module `vpnhide`](https://github.com/okhsunrog/vpnhide).
   You almost always want both modules installed together.
-- **Banking apps with MIR HCE SDK.** The SDK detects modified function
-  prologues in libc.so and silently disables NFC contactless payments.
-  For these apps, use
+- **Apps with aggressive anti-tamper SDKs.** Some SDKs detect modified
+  function prologues in libc.so and silently disable NFC contactless
+  payments. For these apps, use
   [vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod)
   (kernel-level filtering) instead.
 - **arm64 only.** `aarch64-linux-android` is the only supported target.

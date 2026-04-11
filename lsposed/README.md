@@ -25,8 +25,8 @@ VPN interface is up on the device.
 > install either one alone, but for full coverage of both the Java and
 > native stacks you want both installed together.
 >
-> For **banking apps with MIR HCE SDK** (Alfa-Bank, T-Bank, Yandex Bank)
-> where app-process hooks cause crashes or NFC payment degradation, use
+> For **apps with aggressive anti-tamper SDKs** where app-process hooks
+> cause crashes or NFC payment degradation, use
 > [okhsunrog/vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod)
 > (kernel module) for native-side coverage instead of vpnhide-zygisk,
 > and enable this module's **system_server mode** (see below) for
@@ -36,7 +36,7 @@ VPN interface is up on the device.
 ### Verified against third-party detection apps
 
 With **this module + [okhsunrog/vpnhide-zygisk](https://github.com/okhsunrog/vpnhide-zygisk)**
-(or [okhsunrog/vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod) for MIR SDK apps)
+(or [okhsunrog/vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod) for anti-tamper SDK apps)
 installed, and WireGuard running in **split-tunnel** mode (so the
 detection apps' own HTTPS probes go out through the carrier, not the
 tunnel), the following popular Russian "is there a VPN on this device?"
@@ -110,17 +110,16 @@ The complementary native side (`getifaddrs`, `ioctl`, `/proc/net/*`
 read by C/C++/JNI/Flutter that bypasses ART entirely) is the
 responsibility of [vpnhide-zygisk](https://github.com/okhsunrog/vpnhide-zygisk)
 or [vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod) (for
-MIR SDK apps), not this module.
+anti-tamper SDK apps), not this module.
 
 ---
 
-## system_server mode (for banking apps)
+## system_server mode (for apps with anti-tamper SDKs)
 
-Banking apps that bundle NSPK's MIR HCE SDK (Alfa-Bank, T-Bank,
-Yandex Bank) crash when LSPosed loads any module into their process
-and silently lose NFC contactless payments when vpnhide-zygisk's
-inline hooks are present. The default app-process hooks cannot be
-used for these apps.
+Apps that bundle aggressive anti-tamper SDKs (common in banking apps)
+crash when LSPosed loads any module into their process and silently
+lose NFC contactless payments when vpnhide-zygisk's inline hooks are
+present. The default app-process hooks cannot be used for these apps.
 
 **system_server mode** solves this by hooking `writeToParcel()` on
 `NetworkCapabilities`, `NetworkInfo`, and `LinkProperties` inside
@@ -134,8 +133,8 @@ sees the real network state.
 
 ### When to use
 
-Use system_server mode when the target app has MIR HCE SDK or other
-anti-tamper that detects app-process hooks. For apps without such
+Use system_server mode when the target app has an aggressive
+anti-tamper SDK that detects app-process hooks. For apps without such
 SDKs, the default app-process hooks provide more complete coverage.
 
 ### How to enable
@@ -157,10 +156,11 @@ The WebUI writes UIDs to `/proc/vpnhide_targets` (kernel module) and
 watches the directory via `FileObserver` (inotify) and reloads the
 UID list immediately when the file changes — no reboot needed.
 
-**Important:** banking apps with MIR SDK must NOT be added to this
-module's LSPosed app-process scope. Only "System Framework" should be
-in scope for these apps. The app-process scope is still used for
-non-MIR-SDK apps where the default hooks provide better coverage.
+**Important:** apps with aggressive anti-tamper SDKs must NOT be added
+to this module's LSPosed app-process scope. Only "System Framework"
+should be in scope for these apps. The app-process scope is still used
+for apps without such SDKs where the default hooks provide better
+coverage.
 
 ---
 
@@ -297,7 +297,7 @@ companion does — `libc::ioctl` and `libc::getifaddrs` patched in place
 via ByteDance shadowhook. Install both modules together for full
 coverage of the Java + native stacks.
 
-For **MIR SDK apps** (banking apps where vpnhide-zygisk's inline hooks
+For **anti-tamper SDK apps** (where vpnhide-zygisk's inline hooks
 cause NFC payment degradation), use
 [vpnhide-kmod](https://github.com/okhsunrog/vpnhide-kmod) instead — a
 kernel module that provides the same native filtering via kretprobes

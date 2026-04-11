@@ -5,15 +5,15 @@ Android apps by intercepting kernel-level network operations via
 kretprobes. Unlike userspace hooking (Zygisk inline hooks, LSPosed),
 this approach leaves **zero footprint** in the target app's process —
 no modified function prologues, no Xposed framework classes, no
-anonymous memory regions — making it invisible to anti-tamper SDKs
-such as NSPK's MIR HCE (used in Russian banking apps for NFC
+anonymous memory regions — making it invisible to aggressive
+anti-tamper SDKs (such as those used in banking apps for NFC
 contactless payments).
 
 Part of a three-module suite for hiding VPN on Android:
 
 - [okhsunrog/vpnhide](https://github.com/okhsunrog/vpnhide) — LSPosed
   module for Java API hooks. Has app-process mode (default) and
-  system_server mode (for MIR SDK apps, managed through this module's
+  system_server mode (for anti-tamper SDK apps, managed through this module's
   WebUI).
 - [okhsunrog/vpnhide-zygisk](https://github.com/okhsunrog/vpnhide-zygisk)
   — Zygisk module for libc inline hooks (`ioctl`, `getifaddrs`). Works
@@ -37,9 +37,8 @@ All filtering is **per-UID**: only processes whose UID appears in
 
 ## Why not just use vpnhide-zygisk?
 
-Banking apps that bundle NSPK's MIR HCE SDK (Alfa-Bank, T-Bank,
-Yandex Bank, and likely others) have aggressive native anti-tamper
-that detects:
+Apps that bundle aggressive anti-tamper SDKs (common in banking apps)
+have native anti-tamper that detects:
 
 - **LSPosed/Xposed** — ART method entry point trampolines →
   hard crash in `LibContentProvider.attachInfo()`
@@ -48,7 +47,7 @@ that detects:
   silent NFC contactless payment degradation (no crash, payment
   just stops working)
 
-The MIR SDK reads `/proc/self/maps` via **raw `svc #0` syscalls**
+The anti-tamper SDK reads `/proc/self/maps` via **raw `svc #0` syscalls**
 (bypassing any libc hook) and checks ELF relocation integrity. No
 userspace interposition can hide from it.
 
@@ -62,12 +61,12 @@ are completely untouched.
 Pixel 8 Pro, crDroid 12.8, Android 16 (API 36), kernel
 6.1.145-android14-11:
 
-- **Шоколадница** (Flutter, libc ioctl detection): VPN hidden ✅
-- **Yandex Bank** (MIR HCE SDK): launches without crash, NFC
-  contactless payment works ✅
+- **Flutter app with native VPN detection** (libc ioctl): VPN hidden ✅
+- **Banking app with aggressive anti-tamper SDK**: launches without
+  crash, NFC contactless payment works ✅
 - Both **RKNHardering** and **YourVPNDead** detection apps report
   clean (when combined with LSPosed companion for Java API coverage
-  on non-MIR-SDK apps)
+  on non-anti-tamper-SDK apps)
 
 ## GKI compatibility
 
@@ -263,7 +262,7 @@ All changes apply immediately — no reboot needed.
 **Shell:**
 ```bash
 # Write package names to the persistent config
-adb shell su -c 'echo "com.yandex.bank" > /data/adb/vpnhide_kmod/targets.txt'
+adb shell su -c 'echo "com.example.targetapp" > /data/adb/vpnhide_kmod/targets.txt'
 
 # Or write UIDs directly to the kernel module
 adb shell su -c 'echo 10423 > /proc/vpnhide_targets'
@@ -279,9 +278,9 @@ adb shell su -c 'echo 10423 > /proc/vpnhide_targets'
 
 ## Combined use with system_server hooks
 
-For banking apps with MIR HCE SDK (Alfa-Bank, T-Bank, Yandex Bank),
+For apps with aggressive anti-tamper SDKs (common in banking apps),
 full VPN hiding requires covering both native and Java API detection
-paths — without placing any hooks in the banking app's process:
+paths — without placing any hooks in the target app's process:
 
 - **vpnhide-kmod** (this module) covers the native side: `ioctl`
   (`SIOCGIFFLAGS` / `SIOCGIFNAME` / `SIOCGIFCONF`), `getifaddrs()`
@@ -292,8 +291,8 @@ paths — without placing any hooks in the banking app's process:
   `NetworkInfo.writeToParcel()`, `LinkProperties.writeToParcel()` —
   stripping VPN data before Binder serialization reaches the app.
 
-Together they provide complete VPN hiding for banking apps without any
-hooks in the bank's process. The MIR SDK cannot detect either
+Together they provide complete VPN hiding without any hooks in the
+target app's process. The anti-tamper SDK cannot detect either
 component.
 
 ### Setup
@@ -305,12 +304,12 @@ component.
    both the kernel module and the system_server hooks.
 4. **Remove** banking apps from vpnhide's LSPosed app-process scope
    (if they were added previously). Only "System Framework" should be
-   in scope for MIR SDK apps — loading the module into the banking
-   app's process will trigger MIR SDK's anti-tamper detection.
+   in scope for anti-tamper SDK apps — loading the module into the
+   target app's process will trigger the SDK's anti-tamper detection.
 
-For non-MIR-SDK apps, the standard combination of vpnhide (app-process
-hooks) + vpnhide-zygisk provides more complete Java + native coverage
-and does not require this kernel module.
+For apps without aggressive anti-tamper SDKs, the standard combination
+of vpnhide (app-process hooks) + vpnhide-zygisk provides more complete
+Java + native coverage and does not require this kernel module.
 
 ## Architecture notes
 

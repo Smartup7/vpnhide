@@ -89,16 +89,18 @@ class HookEntry : IXposedHookLoadPackage {
             return
         }
 
-        // MIR SDK apps: skip entirely.
-        val hasMirSdk = try {
+        // Apps with aggressive anti-tamper SDKs: skip in-process hooks entirely.
+        // These SDKs detect modified function prologues and hooking framework
+        // memory regions. Use vpnhide-kmod + system_server hooks instead.
+        val hasAntiTamperSdk = try {
             lpparam.classLoader.loadClass("ru.nspk.mir.hce.sdk.LibContentProvider")
             true
         } catch (_: ClassNotFoundException) {
             false
         }
 
-        if (hasMirSdk) {
-            XposedBridge.log("VpnHide: MIR SDK in ${lpparam.packageName}, skipping (use vpnhide-kmod + system_server hooks)")
+        if (hasAntiTamperSdk) {
+            XposedBridge.log("VpnHide: anti-tamper SDK in ${lpparam.packageName}, skipping (use kmod + system_server hooks)")
             return
         }
 
