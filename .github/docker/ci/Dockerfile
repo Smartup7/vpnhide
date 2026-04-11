@@ -51,6 +51,7 @@ ENV AOSP_CLANG_VERSION=clang-r487747c
 ENV AOSP_CLANG_DIR=/opt/aosp-clang
 
 RUN git clone --depth=1 --filter=blob:none --sparse \
+        -b android-gs-shusky-6.1-android16 \
         https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 \
         /tmp/clang-repo && \
     cd /tmp/clang-repo && \
