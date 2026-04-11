@@ -82,7 +82,7 @@ adb shell "su -c 'cat /proc/vpnhide_targets'"
 
 ## Troubleshooting
 
-**`insmod: Exec format error`** — vermagic or symvers CRC mismatch. Use the DDK build (matched symvers) or set UTS_RELEASE to exact `uname -r`.
+**`insmod: Exec format error`** — symvers CRC mismatch. Use the DDK build (matched symvers).
 
 **`insmod: File exists`** — module already loaded. `rmmod vpnhide_kmod` first.
 
