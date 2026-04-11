@@ -4,12 +4,10 @@ Hide an active Android VPN connection from selected apps.
 
 ## Which modules do I need?
 
-| Scenario | Modules | Why |
-|---|---|---|
-| **Banking / government apps** with anti-tamper SDKs | `kmod` + `lsposed` | Zero in-process footprint — undetectable by integrity checks |
-| **Everything else** | `zygisk` + `lsposed` | Simpler to install, no kernel module needed |
+You always need `lsposed` (handles Java API detection) plus one native module:
 
-Both setups cover all reachable VPN detection vectors. The `lsposed` module is always required — it handles Java API detection (the only path not covered by native hooks).
+- **`kmod` + `lsposed`** (recommended) — kernel-level hooks, zero in-process footprint. Invisible to anti-tamper SDKs in banking/government apps. Requires a supported GKI kernel (see below).
+- **`zygisk` + `lsposed`** — in-process libc hooks. Use this if your device's GKI generation isn't covered by the kmod builds, or if you can't install kernel modules.
 
 ## Install
 
@@ -22,7 +20,9 @@ Download the latest release from [Releases](https://github.com/okhsunrog/vpnhide
 3. In LSPosed manager, enable the vpnhide module and add **"System Framework"** to its scope
 4. Reboot
 
-To find your GKI generation: `adb shell uname -r` — the `androidXX-Y.Z` part is the generation (e.g. `6.1.75-android14-11-g...` → `android14-6.1`).
+**Finding your GKI generation:** run `adb shell uname -r`. The output looks like `6.1.75-android14-11-g...` — the generation is `android14-6.1`. Download the matching `vpnhide-kmod-android14-6.1.zip`.
+
+> **Note:** the `android14` in the GKI name is NOT your Android version — it's the kernel generation, frozen at manufacturing time. A Pixel 7 running Android 16 still has an `android13-5.10` kernel.
 
 ### zygisk + lsposed
 
