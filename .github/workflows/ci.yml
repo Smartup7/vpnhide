@@ -192,8 +192,24 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Install Rust + cargo-ndk
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+          . "$HOME/.cargo/env"
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r28b
+
       - name: Build APK
-        run: cd test-app && ./gradlew --no-daemon assembleDebug
+        run: |
+          . "$HOME/.cargo/env"
+          export ANDROID_NDK_HOME=${{ steps.ndk.outputs.ndk-path }}
+          cd test-app && ./gradlew --no-daemon assembleDebug
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

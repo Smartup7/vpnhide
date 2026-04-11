@@ -35,6 +35,8 @@ test-app/.gradle/
 test-app/build/
 test-app/app/build/
 test-app/app/.cxx/
+test-app/app/src/main/jniLibs/
+test-app/native/target/
 test-app/.idea/
 test-app/*.iml
 test-app/local.properties
