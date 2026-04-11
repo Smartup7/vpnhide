@@ -10,7 +10,7 @@ Zero presence in the target app's process -- only "System Framework" is needed i
 
 | Class | Effect |
 |---|---|
-| `NetworkCapabilities` | VPN transport and capability flags stripped before serialization |
+| `NetworkCapabilities` | VPN transport and capability flags stripped before serialization. Covers `hasTransport(VPN)`, `getAllNetworks()` + VPN scan, `getTransportInfo()`. |
 | `NetworkInfo` | VPN type rewritten to WIFI before serialization |
 | `LinkProperties` | VPN interface name and routes stripped before serialization |
 
