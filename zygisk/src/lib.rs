@@ -51,9 +51,10 @@ const LOG_TAG: &str = "vpnhide-zygisk";
 /// directory and migrating the legacy in-module file on first run.
 /// Persistent targets path (survives module updates).
 const TARGETS_FILE: &str = "/data/adb/vpnhide_zygisk/targets.txt";
-/// Module directory copy — zygote can read this on Magisk where SELinux
-/// blocks access to /data/adb/vpnhide_zygisk/.
+/// Module directory copy.
 const TARGETS_FILE_MODULE: &str = "/data/adb/modules/vpnhide_zygisk/targets.txt";
+/// World-readable copy for Magisk where SELinux blocks all /data/adb/ access.
+const TARGETS_FILE_TMP: &str = "/data/local/tmp/vpnhide_targets.txt";
 
 /// Initialize `android_logger` exactly once. Cheap to call from every
 /// forked process — subsequent calls are no-ops. The compile-time log
@@ -315,8 +316,9 @@ fn is_targeted(package: &str) -> bool {
         None => package,
     };
 
-    let content =
-        fs::read_to_string(TARGETS_FILE).or_else(|_| fs::read_to_string(TARGETS_FILE_MODULE));
+    let content = fs::read_to_string(TARGETS_FILE)
+        .or_else(|_| fs::read_to_string(TARGETS_FILE_MODULE))
+        .or_else(|_| fs::read_to_string(TARGETS_FILE_TMP));
 
     match content {
         Ok(content) => content.lines().any(|line| {

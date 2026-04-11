@@ -7,10 +7,13 @@ TARGETS_FILE="$PERSIST_DIR/targets.txt"
 MODULE_DIR="${0%/*}"
 SS_UIDS_FILE="/data/system/vpnhide_uids.txt"
 
-# Copy targets to module directory so zygote can read it on Magisk
-# (SELinux blocks zygote from /data/adb/vpnhide_zygisk/ on Magisk)
+# Copy targets to module dir and world-readable location.
+# On Magisk, SELinux blocks both zygote and untrusted_app from
+# /data/adb/*. /data/local/tmp/ is readable by all apps.
 if [ -f "$TARGETS_FILE" ]; then
     cp "$TARGETS_FILE" "$MODULE_DIR/targets.txt" 2>/dev/null
+    cp "$TARGETS_FILE" /data/local/tmp/vpnhide_targets.txt 2>/dev/null
+    chmod 644 /data/local/tmp/vpnhide_targets.txt 2>/dev/null
 fi
 
 # Wait for PackageManager to be ready

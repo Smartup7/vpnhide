@@ -289,7 +289,7 @@
       const b64 = btoa(body);
 
       // Step 1: save package names to targets.txt (persistent + module dir for Magisk SELinux compat)
-      const step1 = `mkdir -p ${PERSIST_DIR} && echo '${b64}' | base64 -d > ${TARGETS_PATH} && chmod 644 ${TARGETS_PATH} && cp ${TARGETS_PATH} ${MODULE_TARGETS_PATH} 2>/dev/null`;
+      const step1 = `mkdir -p ${PERSIST_DIR} && echo '${b64}' | base64 -d > ${TARGETS_PATH} && chmod 644 ${TARGETS_PATH} && cp ${TARGETS_PATH} ${MODULE_TARGETS_PATH} 2>/dev/null && cp ${TARGETS_PATH} /data/local/tmp/vpnhide_targets.txt 2>/dev/null && chmod 644 /data/local/tmp/vpnhide_targets.txt 2>/dev/null`;
       const r1 = await ksuExec(step1);
       if (r1.errno !== 0) throw new Error(r1.stderr || `step1 errno=${r1.errno}`);
 
