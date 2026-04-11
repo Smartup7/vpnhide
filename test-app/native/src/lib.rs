@@ -1,6 +1,6 @@
+use jni::JNIEnv;
 use jni::objects::JClass;
 use jni::sys::jstring;
-use jni::JNIEnv;
 use std::ffi::CStr;
 use std::io::ErrorKind;
 
@@ -259,7 +259,9 @@ fn open_netlink() -> Result<i32, String> {
             let e = std::io::Error::last_os_error();
             libc::close(fd);
             return Err(if is_selinux_denial(&e) {
-                format!("PASS: netlink bind denied by SELinux ({e}) — app cannot enumerate interfaces")
+                format!(
+                    "PASS: netlink bind denied by SELinux ({e}) — app cannot enumerate interfaces"
+                )
             } else {
                 format!("FAIL: bind error: {e}")
             });
@@ -302,7 +304,12 @@ unsafe fn parse_netlink_msgs(
 ///
 /// # Safety
 /// `buf[start..end]` must contain valid rtattr entries.
-unsafe fn for_each_rtattr(buf: &[u8], start: usize, end: usize, mut on_attr: impl FnMut(&Rtattr, usize)) {
+unsafe fn for_each_rtattr(
+    buf: &[u8],
+    start: usize,
+    end: usize,
+    mut on_attr: impl FnMut(&Rtattr, usize),
+) {
     let mut off = start;
     while off + 4 <= end {
         let rta = unsafe { &*(buf.as_ptr().add(off) as *const Rtattr) };
@@ -333,7 +340,13 @@ fn check_netlink_getlink() -> String {
         req.nlh.nlmsg_flags = (libc::NLM_F_REQUEST | libc::NLM_F_DUMP) as u16;
         req.nlh.nlmsg_seq = 1;
 
-        if libc::send(fd, std::ptr::from_ref(&req).cast(), req.nlh.nlmsg_len as usize, 0) < 0 {
+        if libc::send(
+            fd,
+            std::ptr::from_ref(&req).cast(),
+            req.nlh.nlmsg_len as usize,
+            0,
+        ) < 0
+        {
             let e = last_os_error();
             libc::close(fd);
             return format!("FAIL: send error: {e}");
@@ -350,27 +363,37 @@ fn check_netlink_getlink() -> String {
             if len <= 0 {
                 break;
             }
-            let cont = parse_netlink_msgs(&buf, len as usize, libc::RTM_NEWLINK, |b, offset, msg_len| {
-                let data_start = offset + hdr_plus_ifinfo;
-                let msg_end = offset + msg_len;
-                for_each_rtattr(b, data_start, msg_end, |rta, rta_off| {
-                    if rta.rta_type == IFLA_IFNAME {
-                        let name = cstr_to_str(b.as_ptr().add(rta_off + 4) as *const libc::c_char);
-                        logi(&format!("  netlink RTM_NEWLINK: interface '{name}'"));
-                        if is_vpn_iface(&name) {
-                            vpn.push(name.clone());
+            let cont = parse_netlink_msgs(
+                &buf,
+                len as usize,
+                libc::RTM_NEWLINK,
+                |b, offset, msg_len| {
+                    let data_start = offset + hdr_plus_ifinfo;
+                    let msg_end = offset + msg_len;
+                    for_each_rtattr(b, data_start, msg_end, |rta, rta_off| {
+                        if rta.rta_type == IFLA_IFNAME {
+                            let name =
+                                cstr_to_str(b.as_ptr().add(rta_off + 4) as *const libc::c_char);
+                            logi(&format!("  netlink RTM_NEWLINK: interface '{name}'"));
+                            if is_vpn_iface(&name) {
+                                vpn.push(name.clone());
+                            }
+                            all.push(name);
                         }
-                        all.push(name);
-                    }
-                });
-            });
+                    });
+                },
+            );
             if !cont {
                 break;
             }
         }
         libc::close(fd);
 
-        format_iface_result(&all, &vpn, &format!("{} interfaces via netlink:", all.len()))
+        format_iface_result(
+            &all,
+            &vpn,
+            &format!("{} interfaces via netlink:", all.len()),
+        )
     }
 }
 
@@ -393,7 +416,13 @@ fn check_netlink_getroute() -> String {
         req.nlh.nlmsg_flags = (libc::NLM_F_REQUEST | libc::NLM_F_DUMP) as u16;
         req.nlh.nlmsg_seq = 1;
 
-        if libc::send(fd, std::ptr::from_ref(&req).cast(), req.nlh.nlmsg_len as usize, 0) < 0 {
+        if libc::send(
+            fd,
+            std::ptr::from_ref(&req).cast(),
+            req.nlh.nlmsg_len as usize,
+            0,
+        ) < 0
+        {
             let e = last_os_error();
             libc::close(fd);
             return format!("FAIL: send error: {e}");
@@ -402,33 +431,40 @@ fn check_netlink_getroute() -> String {
         let mut buf = [0u8; 32768];
         let mut vpn = Vec::new();
         let mut total = 0u32;
-        let hdr_plus_rtmsg =
-            std::mem::size_of::<libc::nlmsghdr>() + std::mem::size_of::<Rtmsg>();
+        let hdr_plus_rtmsg = std::mem::size_of::<libc::nlmsghdr>() + std::mem::size_of::<Rtmsg>();
 
         loop {
             let len = libc::recv(fd, buf.as_mut_ptr().cast(), buf.len(), 0);
             if len <= 0 {
                 break;
             }
-            let cont = parse_netlink_msgs(&buf, len as usize, libc::RTM_NEWROUTE, |b, offset, msg_len| {
-                total += 1;
-                let data_start = offset + hdr_plus_rtmsg;
-                let msg_end = offset + msg_len;
-                for_each_rtattr(b, data_start, msg_end, |rta, rta_off| {
-                    if rta.rta_type == RTA_OIF {
-                        let ifindex = *(b.as_ptr().add(rta_off + 4) as *const i32);
-                        let mut ifname_buf = [0u8; libc::IF_NAMESIZE];
-                        let ptr = libc::if_indextoname(ifindex as u32, ifname_buf.as_mut_ptr().cast());
-                        if !ptr.is_null() {
-                            let name = cstr_to_str(ptr);
-                            if is_vpn_iface(&name) {
-                                logi(&format!("  RTM_GETROUTE: VPN route via '{name}'"));
-                                vpn.push(name);
+            let cont = parse_netlink_msgs(
+                &buf,
+                len as usize,
+                libc::RTM_NEWROUTE,
+                |b, offset, msg_len| {
+                    total += 1;
+                    let data_start = offset + hdr_plus_rtmsg;
+                    let msg_end = offset + msg_len;
+                    for_each_rtattr(b, data_start, msg_end, |rta, rta_off| {
+                        if rta.rta_type == RTA_OIF {
+                            let ifindex = *(b.as_ptr().add(rta_off + 4) as *const i32);
+                            let mut ifname_buf = [0u8; libc::IF_NAMESIZE];
+                            let ptr = libc::if_indextoname(
+                                ifindex as u32,
+                                ifname_buf.as_mut_ptr().cast(),
+                            );
+                            if !ptr.is_null() {
+                                let name = cstr_to_str(ptr);
+                                if is_vpn_iface(&name) {
+                                    logi(&format!("  RTM_GETROUTE: VPN route via '{name}'"));
+                                    vpn.push(name);
+                                }
                             }
                         }
-                    }
-                });
-            });
+                    });
+                },
+            );
             if !cont {
                 break;
             }
@@ -484,18 +520,63 @@ macro_rules! jni_fn {
     };
 }
 
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifflags, check_ioctl_siocgifflags());
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifconf, check_ioctl_siocgifconf());
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkGetifaddrs, check_getifaddrs());
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetRoute, check_proc_file("/proc/net/route"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetIfInet6, check_proc_file("/proc/net/if_inet6"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink, check_netlink_getlink());
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetroute, check_netlink_getroute());
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetIpv6Route, check_proc_file("/proc/net/ipv6_route"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetTcp, check_proc_file("/proc/net/tcp"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetTcp6, check_proc_file("/proc/net/tcp6"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetUdp, check_proc_file("/proc/net/udp"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetUdp6, check_proc_file("/proc/net/udp6"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetDev, check_proc_file("/proc/net/dev"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetFibTrie, check_proc_file("/proc/net/fib_trie"));
-jni_fn!(Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkSysClassNet, check_sys_class_net());
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifflags,
+    check_ioctl_siocgifflags()
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkIoctlSiocgifconf,
+    check_ioctl_siocgifconf()
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkGetifaddrs,
+    check_getifaddrs()
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetRoute,
+    check_proc_file("/proc/net/route")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetIfInet6,
+    check_proc_file("/proc/net/if_inet6")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetlink,
+    check_netlink_getlink()
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkNetlinkGetroute,
+    check_netlink_getroute()
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetIpv6Route,
+    check_proc_file("/proc/net/ipv6_route")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetTcp,
+    check_proc_file("/proc/net/tcp")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetTcp6,
+    check_proc_file("/proc/net/tcp6")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetUdp,
+    check_proc_file("/proc/net/udp")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetUdp6,
+    check_proc_file("/proc/net/udp6")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetDev,
+    check_proc_file("/proc/net/dev")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkProcNetFibTrie,
+    check_proc_file("/proc/net/fib_trie")
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_test_NativeChecks_checkSysClassNet,
+    check_sys_class_net()
+);

@@ -13,7 +13,6 @@ use core::sync::atomic::{AtomicBool, Ordering};
 #[repr(C)]
 #[derive(Copy, Clone)]
 #[allow(dead_code)]
-#[repr(C)]
 pub enum ShadowhookMode {
     /// Multiple coexisting hooks per symbol (LIFO chain). shadowhook's
     /// default. Values must match `shadowhook_mode_t` in `shadowhook.h`.

@@ -73,7 +73,7 @@ fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
         if window
             .iter()
             .zip(needle.iter())
-            .all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
         {
             return true;
         }
@@ -87,9 +87,9 @@ fn contains_ignore_ascii_case(haystack: &[u8], needle: &[u8]) -> bool {
 ///
 /// Format:
 /// ```text
-/// Iface	Destination	Gateway	Flags	RefCnt	Use	Metric	Mask	MTU	Window	IRTT
-/// wlan0	00000000	0101A8C0	0003	0	0	0	00000000	0	0	0
-/// tun0	00000000	010010AC	0003	0	0	0	00000000	0	0	0
+/// Iface   Destination Gateway     Flags RefCnt Use Metric Mask     MTU Window IRTT
+/// wlan0   00000000    0101A8C0    0003  0      0   0      00000000 0   0      0
+/// tun0    00000000    010010AC    0003  0      0   0      00000000 0   0      0
 /// ```
 /// The header line (starting with "Iface") is always kept.
 pub fn filter_route_buf(data: &mut [u8]) -> usize {
@@ -522,10 +522,10 @@ mod tests {
         let total_len: u32 = 24;
         let mut msg = Vec::new();
         msg.extend_from_slice(&total_len.to_ne_bytes()); // nlmsg_len
-        msg.extend_from_slice(&msg_type.to_ne_bytes());  // nlmsg_type
-        msg.extend_from_slice(&0u16.to_ne_bytes());      // nlmsg_flags
-        msg.extend_from_slice(&1u32.to_ne_bytes());      // nlmsg_seq
-        msg.extend_from_slice(&0u32.to_ne_bytes());      // nlmsg_pid
+        msg.extend_from_slice(&msg_type.to_ne_bytes()); // nlmsg_type
+        msg.extend_from_slice(&0u16.to_ne_bytes()); // nlmsg_flags
+        msg.extend_from_slice(&1u32.to_ne_bytes()); // nlmsg_seq
+        msg.extend_from_slice(&0u32.to_ne_bytes()); // nlmsg_pid
         // payload: 4 bytes (family etc) + 4 bytes (if_index)
         msg.extend_from_slice(&[0u8; 4]);
         msg.extend_from_slice(&if_index.to_ne_bytes());
@@ -593,9 +593,9 @@ mod tests {
     fn netlink_filter_preserves_non_newaddr_msgs() {
         let nlmsg_done_type: u16 = 3; // NLMSG_DONE
         let mut buf = Vec::new();
-        buf.extend(make_nlmsg(RTM_NEWADDR, 7));          // VPN — remove
-        buf.extend(make_nlmsg(nlmsg_done_type, 0));       // DONE — keep
-        buf.extend(make_nlmsg(RTM_NEWADDR, 2));           // wlan — keep
+        buf.extend(make_nlmsg(RTM_NEWADDR, 7)); // VPN — remove
+        buf.extend(make_nlmsg(nlmsg_done_type, 0)); // DONE — keep
+        buf.extend(make_nlmsg(RTM_NEWADDR, 2)); // wlan — keep
 
         let new_len = filter_netlink_dump(&mut buf, &[7]);
         // Should keep DONE + wlan = 48 bytes

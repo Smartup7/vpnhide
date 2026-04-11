@@ -36,8 +36,8 @@ use std::sync::Once;
 use jni::JNIEnv;
 use log::{debug, error, info};
 use zygisk_api::ZygiskModule;
-use zygisk_api::api::v5::{AppSpecializeArgs, V5, ZygiskOption};
 use zygisk_api::api::ZygiskApi;
+use zygisk_api::api::v5::{AppSpecializeArgs, V5, ZygiskOption};
 
 use crate::hooks::{
     hooked_getifaddrs, hooked_ioctl, hooked_openat, hooked_recvmsg, set_real_getifaddrs_ptr,
@@ -146,18 +146,18 @@ fn mark_cleanup(api: &mut ZygiskApi<'_, V5>) {
 /// Install inline hooks on `libc.so` via ByteDance shadowhook. We patch
 /// three entry points:
 ///
-///   * `ioctl`       — catches `SIOCGIFNAME` / `SIOCGIFFLAGS` interface
-///                     probes from native code.
-///   * `getifaddrs`  — catches the higher-level interface enumeration
-///                     API used by `NetworkInterface.getNetworkInterfaces()`
-///                     inside libcore, by the Dart VM's
-///                     `NetworkInterface.list()`, and by anything in C/C++
-///                     that calls `getifaddrs()` directly.
-///   * `openat`      — intercepts opens of `/proc/net/{route,ipv6_route,
-///                     if_inet6,tcp,tcp6}`; returns a `memfd` with VPN
-///                     entries stripped out.
-///   * `recvmsg`     — filters netlink `RTM_NEWADDR` / `RTM_NEWLINK`
-///                     dump responses, removing VPN interface entries.
+///   * `ioctl` — catches `SIOCGIFNAME` / `SIOCGIFFLAGS` interface
+///     probes from native code.
+///   * `getifaddrs` — catches the higher-level interface enumeration
+///     API used by `NetworkInterface.getNetworkInterfaces()`
+///     inside libcore, by the Dart VM's
+///     `NetworkInterface.list()`, and by anything in C/C++
+///     that calls `getifaddrs()` directly.
+///   * `openat` — intercepts opens of `/proc/net/{route,ipv6_route,
+///     if_inet6,tcp,tcp6}`; returns a `memfd` with VPN
+///     entries stripped out.
+///   * `recvmsg` — filters netlink `RTM_NEWADDR` / `RTM_NEWLINK`
+///     dump responses, removing VPN interface entries.
 ///
 /// This replaces the earlier PLT-hook approach. PLT hooks can only patch
 /// callers that are already mapped at `post_app_specialize` time — which
@@ -168,7 +168,11 @@ fn install_hooks() -> Result<(), String> {
     shadowhook::init_once().map_err(|rc| format!("shadowhook_init: rc={rc}"))?;
 
     hook_libc_sym(c"ioctl", hooked_ioctl as *mut _, set_real_ioctl_ptr)?;
-    hook_libc_sym(c"getifaddrs", hooked_getifaddrs as *mut _, set_real_getifaddrs_ptr)?;
+    hook_libc_sym(
+        c"getifaddrs",
+        hooked_getifaddrs as *mut _,
+        set_real_getifaddrs_ptr,
+    )?;
     hook_libc_sym(c"openat", hooked_openat as *mut _, set_real_openat_ptr)?;
     hook_libc_sym(c"recvmsg", hooked_recvmsg as *mut _, set_real_recvmsg_ptr)?;
 
@@ -248,10 +252,18 @@ fn scrub_shadowhook_maps() {
         }
 
         // Parse the start-end addresses from the first column.
-        let Some(range) = line.split_whitespace().next() else { continue };
-        let Some((start_hex, end_hex)) = range.split_once('-') else { continue };
-        let Ok(start) = usize::from_str_radix(start_hex, 16) else { continue };
-        let Ok(end) = usize::from_str_radix(end_hex, 16) else { continue };
+        let Some(range) = line.split_whitespace().next() else {
+            continue;
+        };
+        let Some((start_hex, end_hex)) = range.split_once('-') else {
+            continue;
+        };
+        let Ok(start) = usize::from_str_radix(start_hex, 16) else {
+            continue;
+        };
+        let Ok(end) = usize::from_str_radix(end_hex, 16) else {
+            continue;
+        };
         let len = end.saturating_sub(start);
         if len == 0 {
             continue;
@@ -264,7 +276,7 @@ fn scrub_shadowhook_maps() {
         let rc = unsafe {
             libc::prctl(
                 0x53564d41_u32 as libc::c_int, // PR_SET_VMA
-                0,                              // PR_SET_VMA_ANON_NAME
+                0,                             // PR_SET_VMA_ANON_NAME
                 start,
                 len,
                 c"".as_ptr(),

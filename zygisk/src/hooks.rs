@@ -1,3 +1,4 @@
+#![allow(clippy::missing_const_for_thread_local)]
 //! The actual libc hook functions.
 //!
 //! These are called INSTEAD OF the real libc symbols from any PLT we've
@@ -139,9 +140,7 @@ pub unsafe extern "C" fn hooked_ioctl(
     if request == SIOCGIFFLAGS as libc::c_ulong {
         if !arg.is_null() {
             let req = unsafe { &*(arg as *const ifreq) };
-            let name_bytes = unsafe {
-                &*(&req.ifr_name as *const [libc::c_char] as *const [u8])
-            };
+            let name_bytes = unsafe { &*(&req.ifr_name as *const [libc::c_char]) };
             if is_vpn_iface_bytes(name_bytes) {
                 set_errno(libc::ENODEV);
                 return -1;
@@ -156,9 +155,7 @@ pub unsafe extern "C" fn hooked_ioctl(
         let ret = unsafe { real(fd, request, arg) };
         if ret == 0 && !arg.is_null() {
             let req = unsafe { &*(arg as *const ifreq) };
-            let name_bytes = unsafe {
-                &*(&req.ifr_name as *const [libc::c_char] as *const [u8])
-            };
+            let name_bytes = unsafe { &*(&req.ifr_name as *const [libc::c_char]) };
             if is_vpn_iface_bytes(name_bytes) {
                 set_errno(libc::ENODEV);
                 return -1;
@@ -200,9 +197,7 @@ unsafe fn filter_ifconf(ifc: *mut ifconf) {
 
     for i in 0..n {
         let entry = unsafe { &*ifc.ifc_req.offset(i as isize) };
-        let name_bytes = unsafe {
-            &*(&entry.ifr_name as *const [libc::c_char] as *const [u8])
-        };
+        let name_bytes = unsafe { &*(&entry.ifr_name as *const [libc::c_char]) };
         if is_vpn_iface_bytes(name_bytes) {
             continue;
         }
@@ -427,9 +422,7 @@ fn is_dirfd_proc_net(dirfd: c_int) -> bool {
         if let Some(slash) = rest.iter().position(|&b| b == b'/') {
             let pid = &rest[..slash];
             let tail = &rest[slash..];
-            return !pid.is_empty()
-                && pid.iter().all(|b| b.is_ascii_digit())
-                && tail == b"/net";
+            return !pid.is_empty() && pid.iter().all(|b| b.is_ascii_digit()) && tail == b"/net";
         }
     }
     false
@@ -518,9 +511,7 @@ unsafe fn open_filtered_proc_net(
         if remaining == 0 {
             break;
         }
-        let n = unsafe {
-            libc::read(fd, buf[total..].as_mut_ptr() as *mut c_void, remaining)
-        };
+        let n = unsafe { libc::read(fd, buf[total..].as_mut_ptr() as *mut c_void, remaining) };
         if n <= 0 {
             break;
         }
@@ -531,9 +522,7 @@ unsafe fn open_filtered_proc_net(
     let filtered_len = apply_filter(&mut buf[..total], kind);
 
     let mfd_flags: libc::c_uint = if flags & libc::O_CLOEXEC != 0 { 1 } else { 0 };
-    let memfd = unsafe {
-        libc::syscall(libc::SYS_memfd_create, c"".as_ptr(), mfd_flags) as c_int
-    };
+    let memfd = unsafe { libc::syscall(libc::SYS_memfd_create, c"".as_ptr(), mfd_flags) as c_int };
     if memfd < 0 {
         set_errno(libc::EIO);
         return -1;
@@ -668,11 +657,7 @@ pub fn set_real_recvmsg_ptr(p: *const ()) {
 ///
 /// Only handles the common single-iov case. Multi-iov netlink responses
 /// pass through unfiltered (extremely rare in practice).
-pub unsafe extern "C" fn hooked_recvmsg(
-    fd: c_int,
-    msg: *mut libc::msghdr,
-    flags: c_int,
-) -> isize {
+pub unsafe extern "C" fn hooked_recvmsg(fd: c_int, msg: *mut libc::msghdr, flags: c_int) -> isize {
     let Some(real) = real_recvmsg() else {
         set_errno(libc::EFAULT);
         return -1;
@@ -695,9 +680,7 @@ pub unsafe extern "C" fn hooked_recvmsg(
         return ret;
     }
 
-    let buf = unsafe {
-        core::slice::from_raw_parts_mut(iov.iov_base as *mut u8, ret as usize)
-    };
+    let buf = unsafe { core::slice::from_raw_parts_mut(iov.iov_base as *mut u8, ret as usize) };
 
     // Quick check: first message type must be RTM_NEWADDR or RTM_NEWLINK.
     let nlmsg_type = u16::from_ne_bytes([buf[4], buf[5]]);

@@ -90,7 +90,9 @@ fn find_ndk_builtins(ndk: &str) -> Option<PathBuf> {
     let base = PathBuf::from(ndk).join("toolchains/llvm/prebuilt");
     for host in std::fs::read_dir(&base).ok()?.flatten() {
         let clang_dir = host.path().join("lib/clang");
-        let Ok(versions) = std::fs::read_dir(&clang_dir) else { continue };
+        let Ok(versions) = std::fs::read_dir(&clang_dir) else {
+            continue;
+        };
         for v in versions.flatten() {
             let candidate = v
                 .path()
