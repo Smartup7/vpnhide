@@ -15,8 +15,8 @@ android {
         applicationId = "dev.okhsunrog.vpnhide.test"
         minSdk = 26
         targetSdk = 35
-        versionCode = 400
-        versionName = "0.4.0"
+        versionCode = 401
+        versionName = "0.4.1"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
