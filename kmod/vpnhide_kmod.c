@@ -166,13 +166,18 @@ static const struct proc_ops targets_proc_ops = {
 };
 
 /* ================================================================== */
-/*  Hook 1: dev_ioctl — SIOCGIFFLAGS / SIOCGIFNAME                   */
+/*  Hook 1: dev_ioctl — all per-interface ioctls                      */
 /*                                                                    */
 /*  dev_ioctl() on GKI 6.1:                                          */
 /*    int dev_ioctl(struct net *net, unsigned int cmd,                */
 /*                  struct ifreq *ifr, void __user *data,            */
 /*                  bool *need_copyout)                               */
 /*  arm64: x0=net, x1=cmd, x2=ifr (KERNEL ptr), x3=data (__user)   */
+/*                                                                    */
+/*  Covers SIOCGIFFLAGS, SIOCGIFNAME, SIOCGIFMTU, SIOCGIFINDEX,     */
+/*  SIOCGIFHWADDR, SIOCGIFADDR, and any other cmd that goes through  */
+/*  dev_ioctl with a VPN interface name in ifr_name. Returns ENODEV  */
+/*  for all of them.                                                  */
 /*                                                                    */
 /*  Note: SIOCGIFCONF goes through sock_ioctl -> dev_ifconf, not     */
 /*  through dev_ioctl, so it is not covered here.                    */
@@ -202,9 +207,6 @@ static int dev_ioctl_ret(struct kretprobe_instance *ri, struct pt_regs *regs)
 	char name[IFNAMSIZ];
 
 	if (data->cmd == 0 || regs_return_value(regs) != 0)
-		return 0;
-
-	if (data->cmd != SIOCGIFFLAGS && data->cmd != SIOCGIFNAME)
 		return 0;
 
 	/*

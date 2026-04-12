@@ -3,6 +3,7 @@ package dev.okhsunrog.vpnhide
 import android.net.LinkProperties
 import android.net.NetworkCapabilities
 import android.net.NetworkInfo
+import android.net.RouteInfo
 import android.os.Binder
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -292,11 +293,12 @@ class HookEntry : IXposedHookLoadPackage {
     }
 
     /**
-     * Hook LinkProperties.writeToParcel — clear VPN interface name from
-     * LP for target callers. Instead of skipping writeToParcel (which
-     * would corrupt the Parcel stream), temporarily clear the interface
-     * name and let serialization proceed normally.
+     * Hook LinkProperties.writeToParcel — clear VPN interface name and
+     * filter routes with VPN interfaces for target callers. Instead of
+     * skipping writeToParcel (which would corrupt the Parcel stream),
+     * temporarily mutate and let serialization proceed normally.
      */
+    @Suppress("UNCHECKED_CAST")
     private fun hookLPWriteToParcel() {
         XposedHelpers.findAndHookMethod(
             LinkProperties::class.java,
@@ -305,6 +307,7 @@ class HookEntry : IXposedHookLoadPackage {
             Integer.TYPE,
             object : XC_MethodHook() {
                 private val savedIfname = ThreadLocal<String>()
+                private val savedRoutes = ThreadLocal<List<RouteInfo>>()
 
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     if (!isTargetCaller()) return
@@ -315,6 +318,20 @@ class HookEntry : IXposedHookLoadPackage {
 
                         savedIfname.set(ifname)
                         XposedHelpers.setObjectField(lp, "mIfaceName", null)
+
+                        // Filter routes that reference VPN interfaces
+                        try {
+                            val routes = XposedHelpers.getObjectField(lp, "mRoutes") as? MutableList<RouteInfo>
+                            if (routes != null && routes.isNotEmpty()) {
+                                savedRoutes.set(ArrayList(routes))
+                                routes.removeAll { route ->
+                                    val routeIface = route.`interface`
+                                    routeIface != null && isVpnInterfaceName(routeIface)
+                                }
+                            }
+                        } catch (_: Throwable) {
+                            // mRoutes may not exist on all Android versions
+                        }
                     } catch (t: Throwable) {
                         XposedBridge.log("VpnHide: LP.writeToParcel before error: ${t.message}")
                     }
@@ -323,8 +340,17 @@ class HookEntry : IXposedHookLoadPackage {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val origIfname = savedIfname.get() ?: return
                     savedIfname.remove()
+                    val origRoutes = savedRoutes.get()
+                    savedRoutes.remove()
                     try {
                         XposedHelpers.setObjectField(param.thisObject, "mIfaceName", origIfname)
+                        if (origRoutes != null) {
+                            val routes = XposedHelpers.getObjectField(param.thisObject, "mRoutes") as? MutableList<RouteInfo>
+                            if (routes != null) {
+                                routes.clear()
+                                routes.addAll(origRoutes)
+                            }
+                        }
                     } catch (_: Throwable) {
                     }
                 }

@@ -27,7 +27,7 @@ use core::cell::Cell;
 use core::ffi::{c_int, c_void};
 use core::sync::atomic::{AtomicPtr, Ordering};
 
-use libc::{SIOCGIFCONF, SIOCGIFFLAGS, SIOCGIFNAME, ifreq};
+use libc::{SIOCGIFCONF, SIOCGIFNAME, ifreq};
 
 use crate::filter::is_vpn_iface_bytes;
 
@@ -102,18 +102,15 @@ pub fn set_real_ioctl_ptr(p: *const ()) {
 
 /// Replacement for `libc::ioctl`.
 ///
-/// Handles:
-/// * `SIOCGIFNAME` — called with `ifr_ifindex` to translate an index to an
-///   interface name. If the real result is a VPN name, we rewrite it to
-///   look like the index doesn't exist by setting errno=ENODEV and
-///   returning -1. The app treats that like "no interface at this index"
-///   and moves on.
-/// * `SIOCGIFFLAGS` — called with `ifr_name` to get the flags of a specific
-///   interface. If the input name is already a VPN, we short-circuit with
-///   errno=ENODEV WITHOUT calling the real ioctl (so the kernel never tells
-///   us the flags include `IFF_POINTOPOINT` and similar tells).
+/// Handles all network interface ioctls that could reveal VPN presence:
 ///
-/// Any other request falls straight through to the real ioctl unchanged.
+/// * `SIOCGIFNAME` — translates index to name. If the result is a VPN
+///   name, returns ENODEV.
+/// * `SIOCGIFCONF` — enumerates all interfaces. VPN entries are compacted
+///   out of the returned array.
+/// * All other `SIOCGIF*` (FLAGS, MTU, INDEX, HWADDR, ADDR, etc.) — the
+///   app provides an interface name in `ifr_name`. If it's a VPN name,
+///   we short-circuit with ENODEV before calling the real ioctl.
 ///
 /// # Safety
 ///
@@ -136,19 +133,14 @@ pub unsafe extern "C" fn hooked_ioctl(
         return unsafe { real(fd, request, arg) };
     }
 
-    // SIOCGIFFLAGS — the app has a name and wants flags. Pre-screen input.
-    if request == SIOCGIFFLAGS as libc::c_ulong {
-        if !arg.is_null() {
-            let req = unsafe { &*(arg as *const ifreq) };
-            let name_bytes = unsafe {
-                core::slice::from_raw_parts(req.ifr_name.as_ptr().cast::<u8>(), req.ifr_name.len())
-            };
-            if is_vpn_iface_bytes(name_bytes) {
-                set_errno(libc::ENODEV);
-                return -1;
-            }
+    // SIOCGIFCONF — enumerate all interfaces. Call through, then compact
+    // the returned ifreq array, removing VPN entries.
+    if request == SIOCGIFCONF as libc::c_ulong {
+        let ret = unsafe { real(fd, request, arg) };
+        if ret == 0 && !arg.is_null() {
+            unsafe { filter_ifconf(arg as *mut ifconf) };
         }
-        return unsafe { real(fd, request, arg) };
+        return ret;
     }
 
     // SIOCGIFNAME — the app has an index and wants a name. Call through,
@@ -168,18 +160,28 @@ pub unsafe extern "C" fn hooked_ioctl(
         return ret;
     }
 
-    // SIOCGIFCONF — enumerate all interfaces. Call through, then compact
-    // the returned ifreq array, removing VPN entries.
-    if request == SIOCGIFCONF as libc::c_ulong {
-        let ret = unsafe { real(fd, request, arg) };
-        if ret == 0 && !arg.is_null() {
-            unsafe { filter_ifconf(arg as *mut ifconf) };
+    // All other SIOCGIF* ioctls (FLAGS, MTU, INDEX, HWADDR, ADDR, etc.)
+    // take an ifreq with the interface name as input. Pre-screen it.
+    if !arg.is_null() && is_siocgif(request) {
+        let req = unsafe { &*(arg as *const ifreq) };
+        let name_bytes = unsafe {
+            core::slice::from_raw_parts(req.ifr_name.as_ptr().cast::<u8>(), req.ifr_name.len())
+        };
+        if is_vpn_iface_bytes(name_bytes) {
+            set_errno(libc::ENODEV);
+            return -1;
         }
-        return ret;
     }
 
-    // Anything else: pass through unmodified.
     unsafe { real(fd, request, arg) }
+}
+
+/// Check if the ioctl request is a SIOCGIF* command (0x8910..0x8930 range).
+/// These all use struct ifreq with ifr_name as input.
+fn is_siocgif(request: libc::c_ulong) -> bool {
+    // SIOCGIF* range: 0x8910 (SIOCGIFNAME) to ~0x8927 (SIOCGIFVLAN)
+    // SIOCGIFCONF (0x8912) is handled separately above.
+    (0x8910..=0x8930).contains(&(request as u32))
 }
 
 /// Walk the `ifreq[]` array inside an `ifconf` and remove VPN entries
