@@ -33,7 +33,13 @@ Download the latest release from [Releases](https://github.com/okhsunrog/vpnhide
 
 ## Configuration
 
-Open the module's WebUI in KernelSU-Next or Magisk manager (tap the module → settings/WebUI). Select which apps should not see the VPN, then tap Save. Force-stop and restart any app whose filtering was changed — the hooks take effect on the next app launch.
+**VPN Hide app (recommended):** open the VPN Hide app (installed as `vpnhide-lsposed.apk`). It shows all installed apps with icons, names, and search. Check the apps you want to hide VPN from, tap Save. Works with both kmod and zygisk — writes to all target locations automatically. Requires root.
+
+**WebUI:** on KernelSU-Next, open the module in the manager and tap WebUI. Same functionality, but only available on KernelSU-Next (Magisk doesn't support WebUI).
+
+**Shell:** edit `/data/adb/vpnhide_kmod/targets.txt` or `/data/adb/vpnhide_zygisk/targets.txt` directly (one package name per line). Reboot for changes to take effect.
+
+After changing targets, force-stop and restart the affected apps — hooks take effect on the next app launch.
 
 ## Verify
 
@@ -44,7 +50,7 @@ Install `vpnhide-test.apk` from the release, add it to the target list via WebUI
 | Directory | What | How |
 |---|---|---|
 | **[kmod/](kmod/)** | Kernel module (C) | `kretprobe` hooks in kernel space. Zero footprint in the target app's process. ([details](kmod/README.md)) |
-| **[lsposed/](lsposed/)** | LSPosed module (Kotlin) | Hooks `writeToParcel` in `system_server` for per-UID Binder filtering. No in-process hooks. ([details](lsposed/README.md)) |
+| **[lsposed/](lsposed/)** | LSPosed module + target picker app (Kotlin) | Hooks `writeToParcel` in `system_server` for per-UID Binder filtering. The APK also serves as the target management UI. ([details](lsposed/README.md)) |
 | **[zygisk/](zygisk/)** | Zygisk module (Rust) | Inline-hooks `libc.so` in the target app's process. Alternative to kmod. ([details](zygisk/README.md)) |
 | **[test-app/](test-app/)** | Diagnostic app (Kotlin + Rust) | 24 checks covering all detection vectors. |
 
