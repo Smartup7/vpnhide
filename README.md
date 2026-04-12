@@ -40,9 +40,15 @@ Download the latest release from [Releases](https://github.com/okhsunrog/vpnhide
 4. Reboot (required — LSPosed hooks are injected into `system_server` at boot, so the module must be active before `system_server` starts)
 5. Open the VPN Hide app, grant it root access (Magisk will prompt automatically; on KernelSU-Next, grant permission manually in the manager), and select target apps
 
-**Finding your GKI generation:** run `adb shell uname -r`. The output looks like `6.1.75-android14-11-g...` — the generation is `android14-6.1`. Download the matching `vpnhide-kmod-android14-6.1.zip`.
+**How to find your GKI generation:**
 
-> **Note:** the `android14` in the GKI name is NOT your Android version — it's the kernel generation. All Pixels from 6 to 9a share the same `android14-6.1` kernel. Pixel 10 series moves to `android16-6.12`.
+1. On your phone, go to **Settings → About phone** and find the **Kernel version** line. It looks something like `6.1.75-android14-11-g...`
+2. You need two parts from this string: the kernel version (`6.1`) and the android generation (`android14`). Together they form your GKI generation: `android14-6.1`
+3. Download the matching file from the release: `vpnhide-kmod-android14-6.1.zip`
+
+Alternatively, if you have ADB set up, run `adb shell uname -r` to see the same kernel version string.
+
+> **Important:** the `android14` in the kernel string is NOT your Android version — it's the kernel generation. For example, Pixels from 6 to 9a all use the `android14-6.1` kernel regardless of whether they run Android 14 or 15. Pixel 10 series uses `android16-6.12`.
 
 ### zygisk + lsposed
 
