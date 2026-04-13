@@ -31,7 +31,10 @@
     <string name="badge_pass">PASS</string>
     <string name="badge_fail">FAIL</string>
     <string name="badge_info">INFO</string>
-    <string name="banner_warning">Turn on your VPN connection before running checks and make sure this app is in the target list.</string>
+    <string name="banner_no_vpn">No active VPN detected. Turn on your VPN connection before running checks.</string>
+    <string name="banner_ready">VPN is active. This app is in the target list. Ready to run checks.</string>
+    <string name="banner_added_self">Added this app to the target list. Restart the app for native-level checks to take effect.</string>
+    <string name="banner_adding_self">Adding this app to target list&#8230;</string>
     <string name="section_native">Native level (kmod / zygisk)</string>
     <string name="section_java">Java API level (LSPosed)</string>
 

@@ -19,6 +19,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.NetworkInterface
@@ -39,10 +41,91 @@ private data class CheckResults(
     val all get() = native + java
 }
 
+private sealed class SelfTargetState {
+    data object Checking : SelfTargetState()
+
+    data object Ready : SelfTargetState()
+
+    data object Adding : SelfTargetState()
+
+    data object NeedsRestart : SelfTargetState()
+}
+
+/** Check if VPN tunnel is active via root (bypasses our own filtering). */
+private suspend fun isVpnActive(): Boolean =
+    withContext(Dispatchers.IO) {
+        val (exitCode, output) = suExec("cat /proc/net/route 2>/dev/null")
+        if (exitCode != 0) return@withContext false
+        output.lines().any { line -> VPN_PREFIXES.any { line.startsWith(it) } }
+    }
+
+/** Check if our own package is in a target list. */
+private suspend fun isSelfInTargetList(packageName: String): Boolean =
+    withContext(Dispatchers.IO) {
+        val (exitCode, output) =
+            suExec(
+                "cat $KMOD_TARGETS 2>/dev/null || cat $ZYGISK_TARGETS 2>/dev/null || true",
+            )
+        if (exitCode != 0) return@withContext false
+        output.lines().any { it.trim() == packageName }
+    }
+
+/** Add our own package to all target lists + resolve UID. */
+private suspend fun addSelfToTargetList(packageName: String): Boolean =
+    withContext(Dispatchers.IO) {
+        // Read existing targets
+        val (_, existing) =
+            suExec(
+                "cat $KMOD_TARGETS 2>/dev/null || cat $ZYGISK_TARGETS 2>/dev/null || true",
+            )
+        val packages =
+            existing
+                .lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("#") }
+                .toMutableSet()
+        packages.add(packageName)
+
+        val body =
+            "# Managed by VPN Hide app\n" +
+                packages.sorted().joinToString("\n") + "\n"
+        val b64 =
+            android.util.Base64.encodeToString(
+                body.toByteArray(),
+                android.util.Base64.NO_WRAP,
+            )
+
+        val cmd =
+            buildString {
+                append("if [ -d /data/adb/vpnhide_kmod ]; then echo '$b64' | base64 -d > $KMOD_TARGETS && chmod 644 $KMOD_TARGETS; fi")
+                append(
+                    " ; if [ -d /data/adb/vpnhide_zygisk ]; then echo '$b64' | base64 -d > $ZYGISK_TARGETS && chmod 644 $ZYGISK_TARGETS; fi",
+                )
+                append(" ; cp $ZYGISK_TARGETS $ZYGISK_MODULE_TARGETS 2>/dev/null; true")
+                // Resolve all UIDs
+                append(" ; ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"; UIDS=\"\"")
+                for (pkg in packages.sorted()) {
+                    append(" ; U=\$(echo \"\$ALL_PKGS\" | grep '^package:$pkg ' | sed 's/.*uid://')")
+                    append(" ; if [ -n \"\$U\" ]; then if [ -z \"\$UIDS\" ]; then UIDS=\"\$U\"; else UIDS=\"\$UIDS\n\$U\"; fi; fi")
+                }
+                append(
+                    " ; if [ -n \"\$UIDS\" ]; then echo \"\$UIDS\" > $PROC_TARGETS 2>/dev/null; echo \"\$UIDS\" > $SS_UIDS_FILE; else echo > $PROC_TARGETS 2>/dev/null; echo > $SS_UIDS_FILE; fi",
+                )
+                append(" ; chmod 644 $SS_UIDS_FILE 2>/dev/null; chcon u:object_r:system_data_file:s0 $SS_UIDS_FILE 2>/dev/null")
+            }
+
+        val (exitCode, _) = suExec(cmd)
+        exitCode == 0
+    }
+
 @Composable
 fun DiagnosticsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val packageName = context.packageName
     val cm = context.getSystemService(ConnectivityManager::class.java)
+
+    var vpnDetected by remember { mutableStateOf<Boolean?>(null) }
+    var selfTargetState by remember { mutableStateOf<SelfTargetState>(SelfTargetState.Checking) }
     var results by remember { mutableStateOf<CheckResults?>(null) }
     val summaryRunning = stringResource(R.string.summary_running)
     var summary by remember { mutableStateOf(summaryRunning) }
@@ -54,7 +137,18 @@ fun DiagnosticsScreen(modifier: Modifier = Modifier) {
         summary = String.format(summaryFmt, passed, scored.size)
     }
 
+    // On first load: check VPN status and self-target, auto-add if needed
     LaunchedEffect(Unit) {
+        vpnDetected = isVpnActive()
+
+        if (isSelfInTargetList(packageName)) {
+            selfTargetState = SelfTargetState.Ready
+        } else {
+            selfTargetState = SelfTargetState.Adding
+            val ok = addSelfToTargetList(packageName)
+            selfTargetState = if (ok) SelfTargetState.NeedsRestart else SelfTargetState.Ready
+        }
+
         val r = runAllChecks(cm, context)
         results = r
         updateSummary(r)
@@ -69,20 +163,39 @@ fun DiagnosticsScreen(modifier: Modifier = Modifier) {
     ) {
         Spacer(Modifier.height(8.dp))
 
-        Card(
-            shape = RoundedCornerShape(8.dp),
-            colors =
-                CardDefaults.cardColors(
+        // Status banners
+        when {
+            selfTargetState == SelfTargetState.Adding -> {
+                StatusBanner(
+                    text = stringResource(R.string.banner_adding_self),
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+
+            selfTargetState == SelfTargetState.NeedsRestart -> {
+                StatusBanner(
+                    text = stringResource(R.string.banner_added_self),
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                ),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = stringResource(R.string.banner_warning),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier.padding(12.dp),
-            )
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+
+            vpnDetected == false -> {
+                StatusBanner(
+                    text = stringResource(R.string.banner_no_vpn),
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+
+            vpnDetected == true && selfTargetState == SelfTargetState.Ready -> {
+                StatusBanner(
+                    text = stringResource(R.string.banner_ready),
+                    containerColor = Color(0xFF1B5E20).copy(alpha = 0.15f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -130,6 +243,26 @@ fun DiagnosticsScreen(modifier: Modifier = Modifier) {
         }
 
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun StatusBanner(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+) {
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = contentColor,
+            modifier = Modifier.padding(12.dp),
+        )
     }
 }
 

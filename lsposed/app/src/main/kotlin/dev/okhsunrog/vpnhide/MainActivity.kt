@@ -35,11 +35,11 @@ import kotlinx.coroutines.withContext
 
 private const val TAG = "VpnHide"
 
-private const val KMOD_TARGETS = "/data/adb/vpnhide_kmod/targets.txt"
-private const val ZYGISK_TARGETS = "/data/adb/vpnhide_zygisk/targets.txt"
-private const val ZYGISK_MODULE_TARGETS = "/data/adb/modules/vpnhide_zygisk/targets.txt"
-private const val PROC_TARGETS = "/proc/vpnhide_targets"
-private const val SS_UIDS_FILE = "/data/system/vpnhide_uids.txt"
+internal const val KMOD_TARGETS = "/data/adb/vpnhide_kmod/targets.txt"
+internal const val ZYGISK_TARGETS = "/data/adb/vpnhide_zygisk/targets.txt"
+internal const val ZYGISK_MODULE_TARGETS = "/data/adb/modules/vpnhide_zygisk/targets.txt"
+internal const val PROC_TARGETS = "/proc/vpnhide_targets"
+internal const val SS_UIDS_FILE = "/data/system/vpnhide_uids.txt"
 
 data class AppEntry(
     val packageName: String,
@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
  * Returns exit code and stdout. Exit code -1 means the su binary
  * couldn't be executed at all (not installed or permission denied).
  */
-private fun suExec(cmd: String): Pair<Int, String> =
+internal fun suExec(cmd: String): Pair<Int, String> =
     try {
         val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
         try {
