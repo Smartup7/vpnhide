@@ -45,6 +45,8 @@ jobs:
       # Kotlin
       - name: ktlint
         run: ktlint "lsposed/**/*.kt"
+      - name: Android lint
+        run: cd lsposed && ./gradlew --no-daemon :app:lint
 
   kmod:
     runs-on: ubuntu-latest

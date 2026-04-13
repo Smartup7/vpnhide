@@ -1,13 +1,11 @@
 package dev.okhsunrog.vpnhide
 
-import android.os.Build
-import android.database.sqlite.SQLiteDatabase
 import android.content.pm.PackageManager
+import android.database.sqlite.SQLiteDatabase
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
-import java.io.File
-import dev.okhsunrog.vpnhide.BuildConfig
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,13 +20,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.okhsunrog.vpnhide.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 // ── Domain types — invalid states are unrepresentable ────────────────────
 
 sealed interface ModuleState {
     data object NotInstalled : ModuleState
+
     data class Installed(
         val version: String?,
         val active: Boolean,
@@ -38,14 +39,26 @@ sealed interface ModuleState {
 
 sealed interface LsposedState {
     data object NotInstalled : LsposedState
-    data class InstalledInactive(val version: String?) : LsposedState
-    data class NeedsReboot(val version: String?) : LsposedState
-    data class Active(val version: String?, val targetCount: Int) : LsposedState
+
+    data class InstalledInactive(
+        val version: String?,
+    ) : LsposedState
+
+    data class NeedsReboot(
+        val version: String?,
+    ) : LsposedState
+
+    data class Active(
+        val version: String?,
+        val targetCount: Int,
+    ) : LsposedState
 }
 
 sealed interface ProtectionCheck {
     data object NoVpn : ProtectionCheck
+
     data object NeedsRestart : ProtectionCheck
+
     data class Checked(
         val native: NativeResult,
         val java: JavaResult,
@@ -54,13 +67,22 @@ sealed interface ProtectionCheck {
 
 sealed interface NativeResult {
     data object Ok : NativeResult
-    data class Fail(val passed: Int, val failed: Int) : NativeResult
+
+    data class Fail(
+        val passed: Int,
+        val failed: Int,
+    ) : NativeResult
+
     data object NoModule : NativeResult
 }
 
 sealed interface JavaResult {
     data object Ok : JavaResult
-    data class Fail(val failedChecks: Int) : JavaResult
+
+    data class Fail(
+        val failedChecks: Int,
+    ) : JavaResult
+
     data object HooksInactive : JavaResult
 }
 
@@ -68,17 +90,25 @@ private enum class NativeModuleKind { Kmod, Zygisk }
 
 private sealed interface LsposedRuntime {
     data object Inactive : LsposedRuntime
-    data class Active(val version: String?) : LsposedRuntime
+
+    data class Active(
+        val version: String?,
+    ) : LsposedRuntime
 }
 
 private sealed interface LsposedFramework {
     data object NotInstalled : LsposedFramework
-    data class Installed(val disabled: Boolean) : LsposedFramework
+
+    data class Installed(
+        val disabled: Boolean,
+    ) : LsposedFramework
 }
 
 private sealed interface LsposedConfig {
     data object ModuleNotConfigured : LsposedConfig
+
     data object Disabled : LsposedConfig
+
     data class Enabled(
         val entries: List<String>,
         val hasSystemFramework: Boolean,
@@ -120,10 +150,11 @@ fun DashboardScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
     ) {
         Spacer(Modifier.height(12.dp))
 
@@ -170,6 +201,7 @@ fun DashboardScreen(
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
             is ProtectionCheck.NeedsRestart -> {
                 StatusBanner(
                     text = stringResource(R.string.dashboard_needs_restart),
@@ -177,6 +209,7 @@ fun DashboardScreen(
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
             }
+
             is ProtectionCheck.Checked -> {
                 NativeProtectionCard(p.native)
                 Spacer(Modifier.height(8.dp))
@@ -211,7 +244,10 @@ fun DashboardScreen(
 // ── UI Components ────────────────────────────────────────────────────────
 
 @Composable
-private fun ModuleCard(name: String, state: ModuleState) {
+private fun ModuleCard(
+    name: String,
+    state: ModuleState,
+) {
     val darkTheme = isSystemInDarkTheme()
     when (state) {
         is ModuleState.NotInstalled -> {
@@ -223,22 +259,25 @@ private fun ModuleCard(name: String, state: ModuleState) {
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             )
         }
+
         is ModuleState.Installed -> {
             val active = state.active
             ModuleCardShell(
                 name = name,
                 version = state.version,
-                subtitle = if (active) {
-                    stringResource(R.string.dashboard_active_targets, state.targetCount)
-                } else {
-                    stringResource(R.string.dashboard_installed_inactive)
-                },
+                subtitle =
+                    if (active) {
+                        stringResource(R.string.dashboard_active_targets, state.targetCount)
+                    } else {
+                        stringResource(R.string.dashboard_installed_inactive)
+                    },
                 dotColor = if (active) Color(0xFF4CAF50) else Color(0xFFFF9800),
-                containerColor = if (active) {
-                    if (darkTheme) Color(0xFF1B5E20).copy(alpha = 0.3f) else Color(0xFFE8F5E9)
-                } else {
-                    if (darkTheme) Color(0xFFE65100).copy(alpha = 0.2f) else Color(0xFFFFF3E0)
-                },
+                containerColor =
+                    if (active) {
+                        if (darkTheme) Color(0xFF1B5E20).copy(alpha = 0.3f) else Color(0xFFE8F5E9)
+                    } else {
+                        if (darkTheme) Color(0xFFE65100).copy(alpha = 0.2f) else Color(0xFFFFF3E0)
+                    },
             )
         }
     }
@@ -258,6 +297,7 @@ private fun LsposedCard(state: LsposedState) {
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
             )
         }
+
         is LsposedState.InstalledInactive -> {
             ModuleCardShell(
                 name = moduleName,
@@ -267,6 +307,7 @@ private fun LsposedCard(state: LsposedState) {
                 containerColor = if (darkTheme) Color(0xFFE65100).copy(alpha = 0.2f) else Color(0xFFFFF3E0),
             )
         }
+
         is LsposedState.NeedsReboot -> {
             ModuleCardShell(
                 name = moduleName,
@@ -276,11 +317,15 @@ private fun LsposedCard(state: LsposedState) {
                 containerColor = if (darkTheme) Color(0xFFE65100).copy(alpha = 0.2f) else Color(0xFFFFF3E0),
             )
         }
+
         is LsposedState.Active -> {
-            val subtitle = stringResource(R.string.dashboard_active_targets, state.targetCount) +
-                if (state.version != null) {
-                    "\n" + stringResource(R.string.dashboard_running_version, state.version)
-                } else ""
+            val subtitle =
+                stringResource(R.string.dashboard_active_targets, state.targetCount) +
+                    if (state.version != null) {
+                        "\n" + stringResource(R.string.dashboard_running_version, state.version)
+                    } else {
+                        ""
+                    }
             ModuleCardShell(
                 name = moduleName,
                 version = state.version,
@@ -344,11 +389,12 @@ private fun ModuleCardShell(
 @Composable
 private fun NativeInstallRecommendationCard(recommendation: NativeInstallRecommendation) {
     val darkTheme = isSystemInDarkTheme()
-    val containerColor = if (recommendation.preferKmod) {
-        if (darkTheme) Color(0xFF0D47A1).copy(alpha = 0.28f) else Color(0xFFE3F2FD)
-    } else {
-        if (darkTheme) Color(0xFF4E342E).copy(alpha = 0.32f) else Color(0xFFFFF3E0)
-    }
+    val containerColor =
+        if (recommendation.preferKmod) {
+            if (darkTheme) Color(0xFF0D47A1).copy(alpha = 0.28f) else Color(0xFFE3F2FD)
+        } else {
+            if (darkTheme) Color(0xFF4E342E).copy(alpha = 0.32f) else Color(0xFFFFF3E0)
+        }
 
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -363,26 +409,28 @@ private fun NativeInstallRecommendationCard(recommendation: NativeInstallRecomme
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = stringResource(
-                    R.string.dashboard_install_recommendation_device,
-                    recommendation.androidVersion,
-                    recommendation.kernelVersion,
-                ),
+                text =
+                    stringResource(
+                        R.string.dashboard_install_recommendation_device,
+                        recommendation.androidVersion,
+                        recommendation.kernelVersion,
+                    ),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = if (recommendation.preferKmod) {
-                    stringResource(
-                        R.string.dashboard_install_recommendation_kmod,
-                        recommendation.recommendedArtifact,
-                    )
-                } else {
-                    stringResource(
-                        R.string.dashboard_install_recommendation_zygisk,
-                        recommendation.recommendedArtifact,
-                    )
-                },
+                text =
+                    if (recommendation.preferKmod) {
+                        stringResource(
+                            R.string.dashboard_install_recommendation_kmod,
+                            recommendation.recommendedArtifact,
+                        )
+                    } else {
+                        stringResource(
+                            R.string.dashboard_install_recommendation_zygisk,
+                            recommendation.recommendedArtifact,
+                        )
+                    },
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
@@ -401,32 +449,41 @@ private fun NativeInstallRecommendationCard(recommendation: NativeInstallRecomme
 @Composable
 private fun NativeProtectionCard(result: NativeResult) {
     val darkTheme = isSystemInDarkTheme()
-    val (containerColor, statusText, statusColor) = when (result) {
-        is NativeResult.Ok -> Triple(
-            if (darkTheme) Color(0xFF1B5E20).copy(alpha = 0.3f) else Color(0xFFE8F5E9),
-            stringResource(R.string.dashboard_protection_ok),
-            Color(0xFF4CAF50),
-        )
-        is NativeResult.Fail -> {
-            val text = if (result.passed > 0) {
-                stringResource(R.string.dashboard_protection_partial)
-            } else {
-                stringResource(R.string.dashboard_protection_fail)
+    val (containerColor, statusText, statusColor) =
+        when (result) {
+            is NativeResult.Ok -> {
+                Triple(
+                    if (darkTheme) Color(0xFF1B5E20).copy(alpha = 0.3f) else Color(0xFFE8F5E9),
+                    stringResource(R.string.dashboard_protection_ok),
+                    Color(0xFF4CAF50),
+                )
             }
-            val color = if (result.passed > 0) Color(0xFFFF9800) else Color(0xFFC62828)
-            val bg = if (result.passed > 0) {
-                if (darkTheme) Color(0xFFE65100).copy(alpha = 0.2f) else Color(0xFFFFF3E0)
-            } else {
-                if (darkTheme) Color(0xFFB71C1C).copy(alpha = 0.3f) else Color(0xFFFFEBEE)
+
+            is NativeResult.Fail -> {
+                val text =
+                    if (result.passed > 0) {
+                        stringResource(R.string.dashboard_protection_partial)
+                    } else {
+                        stringResource(R.string.dashboard_protection_fail)
+                    }
+                val color = if (result.passed > 0) Color(0xFFFF9800) else Color(0xFFC62828)
+                val bg =
+                    if (result.passed > 0) {
+                        if (darkTheme) Color(0xFFE65100).copy(alpha = 0.2f) else Color(0xFFFFF3E0)
+                    } else {
+                        if (darkTheme) Color(0xFFB71C1C).copy(alpha = 0.3f) else Color(0xFFFFEBEE)
+                    }
+                Triple(bg, text, color)
             }
-            Triple(bg, text, color)
+
+            is NativeResult.NoModule -> {
+                Triple(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    stringResource(R.string.dashboard_protection_no_module),
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
-        is NativeResult.NoModule -> Triple(
-            MaterialTheme.colorScheme.surfaceVariant,
-            stringResource(R.string.dashboard_protection_no_module),
-            MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
     ProtectionCardShell(
         label = stringResource(R.string.dashboard_native_protection),
         statusText = statusText,
@@ -438,23 +495,32 @@ private fun NativeProtectionCard(result: NativeResult) {
 @Composable
 private fun JavaProtectionCard(result: JavaResult) {
     val darkTheme = isSystemInDarkTheme()
-    val (containerColor, statusText, statusColor) = when (result) {
-        is JavaResult.Ok -> Triple(
-            if (darkTheme) Color(0xFF1B5E20).copy(alpha = 0.3f) else Color(0xFFE8F5E9),
-            stringResource(R.string.dashboard_protection_ok),
-            Color(0xFF4CAF50),
-        )
-        is JavaResult.Fail -> Triple(
-            if (darkTheme) Color(0xFFB71C1C).copy(alpha = 0.3f) else Color(0xFFFFEBEE),
-            stringResource(R.string.dashboard_protection_fail),
-            Color(0xFFC62828),
-        )
-        is JavaResult.HooksInactive -> Triple(
-            MaterialTheme.colorScheme.surfaceVariant,
-            stringResource(R.string.dashboard_protection_hooks_inactive),
-            MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    val (containerColor, statusText, statusColor) =
+        when (result) {
+            is JavaResult.Ok -> {
+                Triple(
+                    if (darkTheme) Color(0xFF1B5E20).copy(alpha = 0.3f) else Color(0xFFE8F5E9),
+                    stringResource(R.string.dashboard_protection_ok),
+                    Color(0xFF4CAF50),
+                )
+            }
+
+            is JavaResult.Fail -> {
+                Triple(
+                    if (darkTheme) Color(0xFFB71C1C).copy(alpha = 0.3f) else Color(0xFFFFEBEE),
+                    stringResource(R.string.dashboard_protection_fail),
+                    Color(0xFFC62828),
+                )
+            }
+
+            is JavaResult.HooksInactive -> {
+                Triple(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    stringResource(R.string.dashboard_protection_hooks_inactive),
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     ProtectionCardShell(
         label = stringResource(R.string.dashboard_java_protection),
         statusText = statusText,
@@ -546,18 +612,27 @@ private fun loadDashboardState(
         }
     }
 
-    fun parseProps(raw: String): Map<String, String> = raw.lines().mapNotNull {
-        val parts = it.split("=", limit = 2)
-        if (parts.size == 2) parts[0] to parts[1] else null
-    }.toMap()
+    fun parseProps(raw: String): Map<String, String> =
+        raw
+            .lines()
+            .mapNotNull {
+                val parts = it.split("=", limit = 2)
+                if (parts.size == 2) parts[0] to parts[1] else null
+            }.toMap()
 
     fun normalizeVersion(version: String): String = version.trim().removePrefix("v")
 
-    fun compareSemver(left: String, right: String): Int? {
+    fun compareSemver(
+        left: String,
+        right: String,
+    ): Int? {
         fun parse(version: String): List<Int>? =
-            normalizeVersion(version).split('.').map { it.toIntOrNull() }.takeIf { parts ->
-                parts.isNotEmpty() && parts.all { it != null }
-            }?.map { it!! }
+            normalizeVersion(version)
+                .split('.')
+                .map { it.toIntOrNull() }
+                .takeIf { parts ->
+                    parts.isNotEmpty() && parts.all { it != null }
+                }?.map { it!! }
 
         val l = parse(left) ?: return null
         val r = parse(right) ?: return null
@@ -570,47 +645,68 @@ private fun loadDashboardState(
         return 0
     }
 
-    fun buildModuleVersionIssue(kind: NativeModuleKind, moduleVersion: String, appVersion: String): String {
+    fun buildModuleVersionIssue(
+        kind: NativeModuleKind,
+        moduleVersion: String,
+        appVersion: String,
+    ): String {
         val normalizedModuleVersion = normalizeVersion(moduleVersion)
         val normalizedAppVersion = normalizeVersion(appVersion)
         return when (compareSemver(normalizedModuleVersion, normalizedAppVersion)) {
-            null, 0 -> res.getString(
-                when (kind) {
-                    NativeModuleKind.Kmod -> R.string.dashboard_issue_kmod_version_mismatch
-                    NativeModuleKind.Zygisk -> R.string.dashboard_issue_zygisk_version_mismatch
-                },
-                moduleVersion,
-                appVersion,
-            )
-            in Int.MIN_VALUE..-1 -> res.getString(
-                when (kind) {
-                    NativeModuleKind.Kmod -> R.string.dashboard_issue_update_kmod
-                    NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_zygisk
-                },
-                moduleVersion,
-                appVersion,
-            )
-            else -> res.getString(
-                when (kind) {
-                    NativeModuleKind.Kmod -> R.string.dashboard_issue_update_app_for_kmod
-                    NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_app_for_zygisk
-                },
-                moduleVersion,
-                appVersion,
-            )
+            null, 0 -> {
+                res.getString(
+                    when (kind) {
+                        NativeModuleKind.Kmod -> R.string.dashboard_issue_kmod_version_mismatch
+                        NativeModuleKind.Zygisk -> R.string.dashboard_issue_zygisk_version_mismatch
+                    },
+                    moduleVersion,
+                    appVersion,
+                )
+            }
+
+            in Int.MIN_VALUE..-1 -> {
+                res.getString(
+                    when (kind) {
+                        NativeModuleKind.Kmod -> R.string.dashboard_issue_update_kmod
+                        NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_zygisk
+                    },
+                    moduleVersion,
+                    appVersion,
+                )
+            }
+
+            else -> {
+                res.getString(
+                    when (kind) {
+                        NativeModuleKind.Kmod -> R.string.dashboard_issue_update_app_for_kmod
+                        NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_app_for_zygisk
+                    },
+                    moduleVersion,
+                    appVersion,
+                )
+            }
         }
     }
 
     fun androidMajorVersionLabel(): String {
-        val release = Build.VERSION.RELEASE_OR_CODENAME.substringBefore('.')
+        @Suppress("DEPRECATION")
+        val release =
+            if (Build.VERSION.SDK_INT >= 30) {
+                Build.VERSION.RELEASE_OR_CODENAME
+            } else {
+                Build.VERSION.RELEASE
+            }.substringBefore('.')
         return "Android $release"
     }
 
-    fun parseKernelSeries(raw: String): String? =
-        Regex("""\b(\d+\.\d+)""").find(raw)?.groupValues?.get(1)
+    fun parseKernelSeries(raw: String): String? = Regex("""\b(\d+\.\d+)""").find(raw)?.groupValues?.get(1)
 
     fun parseKernelAndroidBranch(raw: String): String? =
-        Regex("""android(\d+)""").find(raw)?.groupValues?.get(1)?.let { "Android $it" }
+        Regex("""android(\d+)""")
+            .find(raw)
+            ?.groupValues
+            ?.get(1)
+            ?.let { "Android $it" }
 
     fun buildNativeInstallRecommendation(): NativeInstallRecommendation? {
         val (_, kernelRaw) = suExec("uname -r 2>/dev/null")
@@ -618,16 +714,17 @@ private fun loadDashboardState(
         val kernelSeries = parseKernelSeries(kernelVersion)
         val kernelBranch = parseKernelAndroidBranch(kernelVersion)
         val artifactKeyVersion = kernelBranch ?: androidMajorVersionLabel()
-        val supportedArtifact = when (artifactKeyVersion to kernelSeries) {
-            "Android 12" to "5.10" -> "vpnhide-kmod-android12-5.10.zip"
-            "Android 13" to "5.10" -> "vpnhide-kmod-android13-5.10.zip"
-            "Android 13" to "5.15" -> "vpnhide-kmod-android13-5.15.zip"
-            "Android 14" to "5.15" -> "vpnhide-kmod-android14-5.15.zip"
-            "Android 14" to "6.1" -> "vpnhide-kmod-android14-6.1.zip"
-            "Android 15" to "6.6" -> "vpnhide-kmod-android15-6.6.zip"
-            "Android 16" to "6.12" -> "vpnhide-kmod-android16-6.12.zip"
-            else -> null
-        }
+        val supportedArtifact =
+            when (artifactKeyVersion to kernelSeries) {
+                "Android 12" to "5.10" -> "vpnhide-kmod-android12-5.10.zip"
+                "Android 13" to "5.10" -> "vpnhide-kmod-android13-5.10.zip"
+                "Android 13" to "5.15" -> "vpnhide-kmod-android13-5.15.zip"
+                "Android 14" to "5.15" -> "vpnhide-kmod-android14-5.15.zip"
+                "Android 14" to "6.1" -> "vpnhide-kmod-android14-6.1.zip"
+                "Android 15" to "6.6" -> "vpnhide-kmod-android15-6.6.zip"
+                "Android 16" to "6.12" -> "vpnhide-kmod-android16-6.12.zip"
+                else -> null
+            }
 
         return if (supportedArtifact != null) {
             NativeInstallRecommendation(
@@ -655,7 +752,11 @@ private fun loadDashboardState(
         val userId = entry.substringAfter('/', "")
         return try {
             val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
-            val appLabel = context.packageManager.getApplicationLabel(appInfo).toString().trim()
+            val appLabel =
+                context.packageManager
+                    .getApplicationLabel(appInfo)
+                    .toString()
+                    .trim()
             when {
                 appLabel.isEmpty() -> packageName
                 userId.isNotEmpty() && userId != "0" -> "$appLabel ($userId)"
@@ -678,13 +779,14 @@ private fun loadDashboardState(
         val walPath = dbWalCopy.absolutePath
         val shmPath = dbShmCopy.absolutePath
         val sourceBase = "/data/adb/lspd/config/modules_config.db"
-        val (copyExit, copyOut) = suExec(
-            "cat $sourceBase > $dbPath && " +
-                "chmod 644 $dbPath && " +
-                "(cat ${sourceBase}-wal > $walPath 2>/dev/null && chmod 644 $walPath || true) && " +
-                "(cat ${sourceBase}-shm > $shmPath 2>/dev/null && chmod 644 $shmPath || true) && " +
-                "ls -l $dbPath ${walPath} ${shmPath} 2>/dev/null || true",
-        )
+        val (copyExit, copyOut) =
+            suExec(
+                "cat $sourceBase > $dbPath && " +
+                    "chmod 644 $dbPath && " +
+                    "(cat $sourceBase-wal > $walPath 2>/dev/null && chmod 644 $walPath || true) && " +
+                    "(cat $sourceBase-shm > $shmPath 2>/dev/null && chmod 644 $shmPath || true) && " +
+                    "ls -l $dbPath $walPath $shmPath 2>/dev/null || true",
+            )
         if (copyExit != 0 || !dbCopy.isFile) {
             Log.w(TAG, "failed to copy LSPosed config db for inspection: exit=$copyExit out=$copyOut")
             return null
@@ -693,49 +795,52 @@ private fun loadDashboardState(
 
         return try {
             SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
-                db.rawQuery(
-                    "SELECT mid, enabled FROM modules WHERE module_pkg_name = ?",
-                    arrayOf(selfPkg),
-                ).use { moduleCursor ->
-                    if (!moduleCursor.moveToFirst()) {
-                        return LsposedConfig.ModuleNotConfigured
-                    }
-
-                    val mid = moduleCursor.getLong(0)
-                    val enabled = moduleCursor.getInt(1) != 0
-                    if (!enabled) {
-                        return LsposedConfig.Disabled
-                    }
-
-                    val scopeEntries = mutableListOf<Pair<String, Int>>()
-                    db.rawQuery(
-                        "SELECT app_pkg_name, user_id FROM scope WHERE mid = ? ORDER BY user_id, app_pkg_name",
-                        arrayOf(mid.toString()),
-                    ).use { scopeCursor ->
-                        while (scopeCursor.moveToNext()) {
-                            scopeEntries += scopeCursor.getString(0) to scopeCursor.getInt(1)
+                db
+                    .rawQuery(
+                        "SELECT mid, enabled FROM modules WHERE module_pkg_name = ?",
+                        arrayOf(selfPkg),
+                    ).use { moduleCursor ->
+                        if (!moduleCursor.moveToFirst()) {
+                            return LsposedConfig.ModuleNotConfigured
                         }
-                    }
-                    val hasSystemFramework = scopeEntries.any { (pkg, userId) -> pkg == "system" && userId == 0 }
-                    val renderedEntries = scopeEntries.map { (pkg, userId) ->
-                        if (pkg == "system" && userId == 0) {
-                            "system"
-                        } else {
-                            "$pkg/$userId"
-                        }
-                    }
-                    val extraEntries = scopeEntries
-                        .filterNot { (pkg, userId) ->
-                            (pkg == "system" && userId == 0) || pkg == selfPkg
-                        }
-                        .map { (pkg, userId) -> "$pkg/$userId" }
 
-                    LsposedConfig.Enabled(
-                        entries = renderedEntries,
-                        hasSystemFramework = hasSystemFramework,
-                        extraEntries = extraEntries,
-                    )
-                }
+                        val mid = moduleCursor.getLong(0)
+                        val enabled = moduleCursor.getInt(1) != 0
+                        if (!enabled) {
+                            return LsposedConfig.Disabled
+                        }
+
+                        val scopeEntries = mutableListOf<Pair<String, Int>>()
+                        db
+                            .rawQuery(
+                                "SELECT app_pkg_name, user_id FROM scope WHERE mid = ? ORDER BY user_id, app_pkg_name",
+                                arrayOf(mid.toString()),
+                            ).use { scopeCursor ->
+                                while (scopeCursor.moveToNext()) {
+                                    scopeEntries += scopeCursor.getString(0) to scopeCursor.getInt(1)
+                                }
+                            }
+                        val hasSystemFramework = scopeEntries.any { (pkg, userId) -> pkg == "system" && userId == 0 }
+                        val renderedEntries =
+                            scopeEntries.map { (pkg, userId) ->
+                                if (pkg == "system" && userId == 0) {
+                                    "system"
+                                } else {
+                                    "$pkg/$userId"
+                                }
+                            }
+                        val extraEntries =
+                            scopeEntries
+                                .filterNot { (pkg, userId) ->
+                                    (pkg == "system" && userId == 0) || pkg == selfPkg
+                                }.map { (pkg, userId) -> "$pkg/$userId" }
+
+                        LsposedConfig.Enabled(
+                            entries = renderedEntries,
+                            hasSystemFramework = hasSystemFramework,
+                            extraEntries = extraEntries,
+                        )
+                    }
             }
         } catch (e: Exception) {
             Log.w(TAG, "failed to inspect LSPosed config db: ${e.message}")
@@ -750,25 +855,27 @@ private fun loadDashboardState(
     fun detectLsposedFramework(): LsposedFramework {
         val moduleDir = "/data/adb/modules/zygisk_vector"
         val updateDir = "/data/adb/modules_update/zygisk_vector"
-        val (exitCode, out) = suExec(
-            "if [ -f $moduleDir/module.prop ]; then " +
-                "echo installed=1; " +
-                "echo disabled=$([ -f $moduleDir/disable ] && echo 1 || echo 0); " +
-            "elif [ -f $updateDir/module.prop ]; then " +
-                "echo installed=1; " +
-                "echo disabled=$([ -f $updateDir/disable ] && echo 1 || echo 0); " +
-            "else " +
-                "echo installed=0; " +
-            "fi",
-        )
+        val (exitCode, out) =
+            suExec(
+                "if [ -f $moduleDir/module.prop ]; then " +
+                    "echo installed=1; " +
+                    "echo disabled=$([ -f $moduleDir/disable ] && echo 1 || echo 0); " +
+                    "elif [ -f $updateDir/module.prop ]; then " +
+                    "echo installed=1; " +
+                    "echo disabled=$([ -f $updateDir/disable ] && echo 1 || echo 0); " +
+                    "else " +
+                    "echo installed=0; " +
+                    "fi",
+            )
         val props = parseProps(out)
         val installed = exitCode == 0 && props["installed"] == "1"
         val disabled = props["disabled"] == "1"
-        val framework = if (installed) {
-            LsposedFramework.Installed(disabled = disabled)
-        } else {
-            LsposedFramework.NotInstalled
-        }
+        val framework =
+            if (installed) {
+                LsposedFramework.Installed(disabled = disabled)
+            } else {
+                LsposedFramework.NotInstalled
+            }
         Log.i(TAG, "lsposed framework: $framework (raw=$out)")
         return framework
     }
@@ -778,32 +885,35 @@ private fun loadDashboardState(
     val (_, procExists) = suExec("[ -f $PROC_TARGETS ] && echo 1 || echo 0")
     val kmodActive = kmodInstalled && procExists.trim() == "1"
     val kmodTargetCount = if (kmodInstalled) countTargets(KMOD_TARGETS) else 0
-    val kmod: ModuleState = if (kmodInstalled) {
-        ModuleState.Installed(kmodVersion, kmodActive, kmodTargetCount)
-    } else {
-        ModuleState.NotInstalled
-    }
+    val kmod: ModuleState =
+        if (kmodInstalled) {
+            ModuleState.Installed(kmodVersion, kmodActive, kmodTargetCount)
+        } else {
+            ModuleState.NotInstalled
+        }
     Log.i(TAG, "kmod: $kmod")
 
     // zygisk
     val (zygiskInstalled, zygiskVersion) = parseModuleProp(ZYGISK_MODULE_DIR)
     val zygiskStatusFile = File(context.filesDir, ZYGISK_STATUS_FILE_NAME)
-    val zygiskStatusRaw = try {
-        zygiskStatusFile.takeIf { it.isFile }?.readText().orEmpty()
-    } catch (e: Exception) {
-        Log.w(TAG, "failed to read zygisk status heartbeat: ${e.message}")
-        ""
-    }
+    val zygiskStatusRaw =
+        try {
+            zygiskStatusFile.takeIf { it.isFile }?.readText().orEmpty()
+        } catch (e: Exception) {
+            Log.w(TAG, "failed to read zygisk status heartbeat: ${e.message}")
+            ""
+        }
     val zygiskProps = parseProps(zygiskStatusRaw)
     val (_, currentBootId) = suExec("cat /proc/sys/kernel/random/boot_id 2>/dev/null")
     val zygiskBootId = zygiskProps["boot_id"]
     val zygiskActive = zygiskInstalled && zygiskBootId != null && zygiskBootId == currentBootId.trim()
     val zygiskTargetCount = if (zygiskInstalled) countTargets(ZYGISK_TARGETS) else 0
-    val zygisk: ModuleState = if (zygiskInstalled) {
-        ModuleState.Installed(zygiskVersion, zygiskActive, zygiskTargetCount)
-    } else {
-        ModuleState.NotInstalled
-    }
+    val zygisk: ModuleState =
+        if (zygiskInstalled) {
+            ModuleState.Installed(zygiskVersion, zygiskActive, zygiskTargetCount)
+        } else {
+            ModuleState.NotInstalled
+        }
     Log.i(TAG, "zygisk: $zygisk (heartbeatBootId=$zygiskBootId currentBootId=${currentBootId.trim()})")
     val nativeInstallRecommendation =
         if (kmod is ModuleState.NotInstalled && zygisk is ModuleState.NotInstalled) {
@@ -821,36 +931,60 @@ private fun loadDashboardState(
     val hooksActiveThisBoot = hookBootId != null && hookBootId == currentBootId.trim()
     val lsposedTargetCount = countTargets(LSPOSED_TARGETS)
     val lsposedFramework = detectLsposedFramework()
-    val lsposedConfig = when (lsposedFramework) {
-        LsposedFramework.NotInstalled -> LsposedConfig.ModuleNotConfigured
-        is LsposedFramework.Installed -> if (lsposedFramework.disabled) {
-            LsposedConfig.Disabled
-        } else {
-            readLsposedConfig()
-        }
-    }
-    val lsposedRuntime: LsposedRuntime = if (hooksActiveThisBoot) {
-        LsposedRuntime.Active(hookVersion)
-    } else {
-        LsposedRuntime.Inactive
-    }
+    val lsposedConfig =
+        when (lsposedFramework) {
+            LsposedFramework.NotInstalled -> {
+                LsposedConfig.ModuleNotConfigured
+            }
 
-    val lsposed: LsposedState = when (lsposedRuntime) {
-        is LsposedRuntime.Active -> LsposedState.Active(lsposedRuntime.version, lsposedTargetCount)
-        LsposedRuntime.Inactive -> when (lsposedConfig) {
-            null -> LsposedState.InstalledInactive(null)
-            LsposedConfig.ModuleNotConfigured -> when (lsposedFramework) {
-                LsposedFramework.NotInstalled -> LsposedState.NotInstalled
-                is LsposedFramework.Installed -> LsposedState.InstalledInactive(null)
-            }
-            LsposedConfig.Disabled -> LsposedState.InstalledInactive(null)
-            is LsposedConfig.Enabled -> if (lsposedConfig.hasSystemFramework) {
-                LsposedState.NeedsReboot(hookVersion)
-            } else {
-                LsposedState.InstalledInactive(null)
+            is LsposedFramework.Installed -> {
+                if (lsposedFramework.disabled) {
+                    LsposedConfig.Disabled
+                } else {
+                    readLsposedConfig()
+                }
             }
         }
-    }
+    val lsposedRuntime: LsposedRuntime =
+        if (hooksActiveThisBoot) {
+            LsposedRuntime.Active(hookVersion)
+        } else {
+            LsposedRuntime.Inactive
+        }
+
+    val lsposed: LsposedState =
+        when (lsposedRuntime) {
+            is LsposedRuntime.Active -> {
+                LsposedState.Active(lsposedRuntime.version, lsposedTargetCount)
+            }
+
+            LsposedRuntime.Inactive -> {
+                when (lsposedConfig) {
+                    null -> {
+                        LsposedState.InstalledInactive(null)
+                    }
+
+                    LsposedConfig.ModuleNotConfigured -> {
+                        when (lsposedFramework) {
+                            LsposedFramework.NotInstalled -> LsposedState.NotInstalled
+                            is LsposedFramework.Installed -> LsposedState.InstalledInactive(null)
+                        }
+                    }
+
+                    LsposedConfig.Disabled -> {
+                        LsposedState.InstalledInactive(null)
+                    }
+
+                    is LsposedConfig.Enabled -> {
+                        if (lsposedConfig.hasSystemFramework) {
+                            LsposedState.NeedsReboot(hookVersion)
+                        } else {
+                            LsposedState.InstalledInactive(null)
+                        }
+                    }
+                }
+            }
+        }
     Log.i(
         TAG,
         "lsposed: $lsposed (hookBootId=$hookBootId currentBootId=${currentBootId.trim()} framework=$lsposedFramework runtime=$lsposedRuntime config=$lsposedConfig)",
@@ -868,20 +1002,30 @@ private fun loadDashboardState(
         issues += res.getString(R.string.dashboard_issue_reboot)
     }
     when (lsposedConfig) {
-        null -> issues += res.getString(R.string.dashboard_issue_lsposed_config_unreadable)
-        LsposedConfig.ModuleNotConfigured -> if (lsposedFramework is LsposedFramework.Installed) {
+        null -> {
+            issues += res.getString(R.string.dashboard_issue_lsposed_config_unreadable)
+        }
+
+        LsposedConfig.ModuleNotConfigured -> {
+            if (lsposedFramework is LsposedFramework.Installed) {
+                issues += res.getString(R.string.dashboard_issue_lsposed_not_enabled)
+            }
+        }
+
+        LsposedConfig.Disabled -> {
             issues += res.getString(R.string.dashboard_issue_lsposed_not_enabled)
         }
-        LsposedConfig.Disabled -> issues += res.getString(R.string.dashboard_issue_lsposed_not_enabled)
+
         is LsposedConfig.Enabled -> {
             if (!lsposedConfig.hasSystemFramework) {
                 issues += res.getString(R.string.dashboard_issue_lsposed_no_system_scope)
             }
             if (lsposedConfig.extraEntries.isNotEmpty()) {
-                issues += res.getString(
-                    R.string.dashboard_issue_lsposed_extra_scope,
-                    lsposedConfig.extraEntries.map(::resolveScopeEntryLabel).joinToString(", "),
-                )
+                issues +=
+                    res.getString(
+                        R.string.dashboard_issue_lsposed_extra_scope,
+                        lsposedConfig.extraEntries.map(::resolveScopeEntryLabel).joinToString(", "),
+                    )
             }
         }
     }
@@ -907,27 +1051,36 @@ private fun loadDashboardState(
     val vpnActive = isVpnActiveSync()
     Log.i(TAG, "vpnActive=$vpnActive selfNeedsRestart=$selfNeedsRestart")
 
-    val protection: ProtectionCheck = when {
-        !vpnActive -> ProtectionCheck.NoVpn
-        selfNeedsRestart -> ProtectionCheck.NeedsRestart
-        else -> {
-            val native = if (hasNative) {
-                runNativeProtectionCheck()
-            } else {
-                NativeResult.NoModule
+    val protection: ProtectionCheck =
+        when {
+            !vpnActive -> {
+                ProtectionCheck.NoVpn
             }
-            Log.i(TAG, "nativeResult=$native")
 
-            val java = if (lsposed is LsposedState.Active) {
-                runJavaProtectionCheck(cm)
-            } else {
-                JavaResult.HooksInactive
+            selfNeedsRestart -> {
+                ProtectionCheck.NeedsRestart
             }
-            Log.i(TAG, "javaResult=$java")
 
-            ProtectionCheck.Checked(native, java)
+            else -> {
+                val native =
+                    if (hasNative) {
+                        runNativeProtectionCheck()
+                    } else {
+                        NativeResult.NoModule
+                    }
+                Log.i(TAG, "nativeResult=$native")
+
+                val java =
+                    if (lsposed is LsposedState.Active) {
+                        runJavaProtectionCheck(cm)
+                    } else {
+                        JavaResult.HooksInactive
+                    }
+                Log.i(TAG, "javaResult=$java")
+
+                ProtectionCheck.Checked(native, java)
+            }
         }
-    }
 
     Log.i(TAG, "protection=$protection issues=$issues")
     Log.i(TAG, "=== Dashboard state loaded ===")
@@ -946,9 +1099,10 @@ private fun isVpnActiveSync(): Boolean {
     val (exitCode, output) = suExec("ls /sys/class/net/ 2>/dev/null")
     if (exitCode != 0) return false
     val vpnPrefixes = listOf("tun", "wg", "ppp", "tap", "ipsec", "xfrm")
-    val vpnIfaces = output.lines().map { it.trim() }.filter { name ->
-        name.isNotEmpty() && vpnPrefixes.any { name.startsWith(it) }
-    }
+    val vpnIfaces =
+        output.lines().map { it.trim() }.filter { name ->
+            name.isNotEmpty() && vpnPrefixes.any { name.startsWith(it) }
+        }
     if (vpnIfaces.isEmpty()) {
         Log.d(TAG, "isVpnActive: no VPN interfaces found")
         return false
@@ -962,24 +1116,25 @@ private fun isVpnActiveSync(): Boolean {
 }
 
 private fun runNativeProtectionCheck(): NativeResult {
-    val checks = listOf(
-        "ioctl_flags" to { NativeChecks.checkIoctlSiocgifflags() },
-        "ioctl_mtu" to { NativeChecks.checkIoctlSiocgifmtu() },
-        "ioctl_conf" to { NativeChecks.checkIoctlSiocgifconf() },
-        "getifaddrs" to { NativeChecks.checkGetifaddrs() },
-        "netlink_getlink" to { NativeChecks.checkNetlinkGetlink() },
-        "netlink_getroute" to { NativeChecks.checkNetlinkGetroute() },
-        "proc_route" to { NativeChecks.checkProcNetRoute() },
-        "proc_ipv6_route" to { NativeChecks.checkProcNetIpv6Route() },
-        "proc_if_inet6" to { NativeChecks.checkProcNetIfInet6() },
-        "proc_tcp" to { NativeChecks.checkProcNetTcp() },
-        "proc_tcp6" to { NativeChecks.checkProcNetTcp6() },
-        "proc_udp" to { NativeChecks.checkProcNetUdp() },
-        "proc_udp6" to { NativeChecks.checkProcNetUdp6() },
-        "proc_dev" to { NativeChecks.checkProcNetDev() },
-        "proc_fib_trie" to { NativeChecks.checkProcNetFibTrie() },
-        "sys_class_net" to { NativeChecks.checkSysClassNet() },
-    )
+    val checks =
+        listOf(
+            "ioctl_flags" to { NativeChecks.checkIoctlSiocgifflags() },
+            "ioctl_mtu" to { NativeChecks.checkIoctlSiocgifmtu() },
+            "ioctl_conf" to { NativeChecks.checkIoctlSiocgifconf() },
+            "getifaddrs" to { NativeChecks.checkGetifaddrs() },
+            "netlink_getlink" to { NativeChecks.checkNetlinkGetlink() },
+            "netlink_getroute" to { NativeChecks.checkNetlinkGetroute() },
+            "proc_route" to { NativeChecks.checkProcNetRoute() },
+            "proc_ipv6_route" to { NativeChecks.checkProcNetIpv6Route() },
+            "proc_if_inet6" to { NativeChecks.checkProcNetIfInet6() },
+            "proc_tcp" to { NativeChecks.checkProcNetTcp() },
+            "proc_tcp6" to { NativeChecks.checkProcNetTcp6() },
+            "proc_udp" to { NativeChecks.checkProcNetUdp() },
+            "proc_udp6" to { NativeChecks.checkProcNetUdp6() },
+            "proc_dev" to { NativeChecks.checkProcNetDev() },
+            "proc_fib_trie" to { NativeChecks.checkProcNetFibTrie() },
+            "sys_class_net" to { NativeChecks.checkSysClassNet() },
+        )
 
     var passed = 0
     var failed = 0
@@ -989,17 +1144,24 @@ private fun runNativeProtectionCheck(): NativeResult {
             val result = check()
             when {
                 result.startsWith("NETWORK_BLOCKED:") -> {
-                    skipped++; Log.d(TAG, "native[$name]: NETWORK_BLOCKED")
+                    skipped++
+                    Log.d(TAG, "native[$name]: NETWORK_BLOCKED")
                 }
+
                 result.contains("SELinux") || result.contains("EACCES") ||
                     result.contains("Permission denied") -> {
-                    skipped++; Log.d(TAG, "native[$name]: SELinux blocked, skipping")
+                    skipped++
+                    Log.d(TAG, "native[$name]: SELinux blocked, skipping")
                 }
+
                 result.startsWith("PASS") -> {
-                    passed++; Log.d(TAG, "native[$name]: PASS")
+                    passed++
+                    Log.d(TAG, "native[$name]: PASS")
                 }
+
                 else -> {
-                    failed++; Log.w(TAG, "native[$name]: FAIL — $result")
+                    failed++
+                    Log.w(TAG, "native[$name]: FAIL — $result")
                 }
             }
         } catch (e: Exception) {
@@ -1010,9 +1172,13 @@ private fun runNativeProtectionCheck(): NativeResult {
 
     Log.i(TAG, "native protection: passed=$passed failed=$failed skipped=$skipped")
     return when {
-        passed == 0 && failed == 0 -> NativeResult.Ok // all SELinux-blocked = nothing leaked
+        passed == 0 && failed == 0 -> NativeResult.Ok
+
+        // all SELinux-blocked = nothing leaked
         failed == 0 -> NativeResult.Ok
+
         passed > 0 -> NativeResult.Fail(passed, failed)
+
         else -> NativeResult.Fail(0, failed)
     }
 }
@@ -1020,9 +1186,15 @@ private fun runNativeProtectionCheck(): NativeResult {
 @Suppress("DEPRECATION")
 private fun runJavaProtectionCheck(cm: ConnectivityManager): JavaResult {
     val net = cm.activeNetwork
-    if (net == null) { Log.d(TAG, "java: no active network"); return JavaResult.Ok }
+    if (net == null) {
+        Log.d(TAG, "java: no active network")
+        return JavaResult.Ok
+    }
     val caps = cm.getNetworkCapabilities(net)
-    if (caps == null) { Log.d(TAG, "java: no capabilities"); return JavaResult.Ok }
+    if (caps == null) {
+        Log.d(TAG, "java: no capabilities")
+        return JavaResult.Ok
+    }
 
     var failed = 0
 
@@ -1039,9 +1211,10 @@ private fun runJavaProtectionCheck(cm: ConnectivityManager): JavaResult {
     if (isVpnTi) failed++
     Log.d(TAG, "java: transportInfo=${info?.javaClass?.name} isVpn=$isVpnTi")
 
-    val vpnNets = cm.allNetworks.count {
-        cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-    }
+    val vpnNets =
+        cm.allNetworks.count {
+            cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        }
     if (vpnNets > 0) failed++
     Log.d(TAG, "java: allNetworks vpnCount=$vpnNets")
 

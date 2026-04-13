@@ -12,6 +12,9 @@
     <string name="btn_save">Сохранить</string>
     <string name="search_placeholder">Поиск приложений&#8230;</string>
     <string name="filter_system">Системные</string>
+    <string name="filter_show_system">Показать системные приложения</string>
+    <string name="apps_hint_toggles">Нажимайте L, K, Z для переключения отдельных уровней защиты (LSPosed, модуль ядра, Zygisk). Нажмите на строку, чтобы переключить все уровни сразу.</string>
+    <string name="apps_hint_zygisk">Некоторые приложения обнаруживают хуки Zygisk. Для таких приложений оставьте Z выключенным и используйте другие уровни защиты.</string>
 
     <!-- Root status -->
     <string name="root_error_title">Требуется root-доступ</string>

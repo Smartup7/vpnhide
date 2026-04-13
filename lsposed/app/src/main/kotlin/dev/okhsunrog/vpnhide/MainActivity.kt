@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.util.Log
-import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -20,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 private const val TAG = "VpnHide"
 
@@ -105,15 +104,18 @@ internal fun cleanupStaleZygiskStatus(context: android.content.Context) {
     val statusFile = File(context.filesDir, ZYGISK_STATUS_FILE_NAME)
     if (!statusFile.isFile) return
 
-    val props = try {
-        statusFile.readLines().mapNotNull {
-            val parts = it.split("=", limit = 2)
-            if (parts.size == 2) parts[0] to parts[1] else null
-        }.toMap()
-    } catch (e: Exception) {
-        Log.w(TAG, "cleanupStaleZygiskStatus: failed to read heartbeat: ${e.message}")
-        emptyMap()
-    }
+    val props =
+        try {
+            statusFile
+                .readLines()
+                .mapNotNull {
+                    val parts = it.split("=", limit = 2)
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }.toMap()
+        } catch (e: Exception) {
+            Log.w(TAG, "cleanupStaleZygiskStatus: failed to read heartbeat: ${e.message}")
+            emptyMap()
+        }
 
     val heartbeatBootId = props["boot_id"]
     val (_, currentBootIdRaw) = suExec("cat /proc/sys/kernel/random/boot_id 2>/dev/null")
@@ -144,7 +146,10 @@ internal fun cleanupStaleZygiskStatus(context: android.content.Context) {
 internal fun ensureSelfInTargets(selfPkg: String): Boolean {
     var added = false
 
-    fun addIfMissing(path: String, dirCheck: String?) {
+    fun addIfMissing(
+        path: String,
+        dirCheck: String?,
+    ) {
         if (dirCheck != null) {
             val (_, exists) = suExec("[ -d $dirCheck ] && echo 1 || echo 0")
             if (exists.trim() != "1") {
@@ -158,8 +163,9 @@ internal fun ensureSelfInTargets(selfPkg: String): Boolean {
             Log.d(TAG, "ensureSelfInTargets: $selfPkg already in $path")
             return
         }
-        val newBody = "# Managed by VPN Hide app\n" +
-            (existing + selfPkg).sorted().joinToString("\n") + "\n"
+        val newBody =
+            "# Managed by VPN Hide app\n" +
+                (existing + selfPkg).sorted().joinToString("\n") + "\n"
         val b64 = android.util.Base64.encodeToString(newBody.toByteArray(), android.util.Base64.NO_WRAP)
         suExec("echo '$b64' | base64 -d > $path && chmod 644 $path")
         Log.i(TAG, "ensureSelfInTargets: added $selfPkg to $path")
@@ -172,18 +178,21 @@ internal fun ensureSelfInTargets(selfPkg: String): Boolean {
     addIfMissing(LSPOSED_TARGETS, null)
 
     // Resolve UIDs so hooks pick us up immediately (kmod + lsposed support live reload)
-    val uidCmd = buildString {
-        append("ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"")
-        append("; SELF_UID=\$(echo \"\$ALL_PKGS\" | grep '^package:$selfPkg ' | sed 's/.*uid://')")
-        append("; if [ -f $PROC_TARGETS ] && [ -n \"\$SELF_UID\" ]; then")
-        append("   EXISTING=\$(cat $PROC_TARGETS 2>/dev/null)")
-        append(";  echo \"\$EXISTING\" | grep -q \"^\$SELF_UID\$\" || echo \"\$SELF_UID\" >> $PROC_TARGETS")
-        append("; fi")
-        append("; if [ -n \"\$SELF_UID\" ]; then")
-        append("   EXISTING2=\$(cat $SS_UIDS_FILE 2>/dev/null)")
-        append(";  echo \"\$EXISTING2\" | grep -q \"^\$SELF_UID\$\" || { echo \"\$SELF_UID\" >> $SS_UIDS_FILE; chmod 644 $SS_UIDS_FILE; chcon u:object_r:system_data_file:s0 $SS_UIDS_FILE 2>/dev/null; }")
-        append("; fi")
-    }
+    val uidCmd =
+        buildString {
+            append("ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"")
+            append("; SELF_UID=\$(echo \"\$ALL_PKGS\" | grep '^package:$selfPkg ' | sed 's/.*uid://')")
+            append("; if [ -f $PROC_TARGETS ] && [ -n \"\$SELF_UID\" ]; then")
+            append("   EXISTING=\$(cat $PROC_TARGETS 2>/dev/null)")
+            append(";  echo \"\$EXISTING\" | grep -q \"^\$SELF_UID\$\" || echo \"\$SELF_UID\" >> $PROC_TARGETS")
+            append("; fi")
+            append("; if [ -n \"\$SELF_UID\" ]; then")
+            append("   EXISTING2=\$(cat $SS_UIDS_FILE 2>/dev/null)")
+            append(
+                ";  echo \"\$EXISTING2\" | grep -q \"^\$SELF_UID\$\" || { echo \"\$SELF_UID\" >> $SS_UIDS_FILE; chmod 644 $SS_UIDS_FILE; chcon u:object_r:system_data_file:s0 $SS_UIDS_FILE 2>/dev/null; }",
+            )
+            append("; fi")
+        }
     suExec(uidCmd)
     Log.d(TAG, "ensureSelfInTargets: done, added=$added")
     return added
@@ -232,14 +241,14 @@ private enum class Tab { Dashboard, Apps, Diagnostics }
 private fun MainScreen() {
     val context = LocalContext.current
     var currentTab by remember { mutableStateOf(Tab.Dashboard) }
-    var showSystem by remember { mutableStateOf(false) }
     var selfNeedsRestart by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        selfNeedsRestart = withContext(Dispatchers.IO) {
-            cleanupStaleZygiskStatus(context)
-            ensureSelfInTargets(context.packageName)
-        }
+        selfNeedsRestart =
+            withContext(Dispatchers.IO) {
+                cleanupStaleZygiskStatus(context)
+                ensureSelfInTargets(context.packageName)
+            }
     }
 
     Scaffold(
@@ -251,22 +260,6 @@ private fun MainScreen() {
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
-                actions = {
-                    if (currentTab == Tab.Apps) {
-                        IconButton(onClick = { showSystem = !showSystem }) {
-                            Icon(
-                                Icons.Outlined.FilterAlt,
-                                contentDescription = stringResource(R.string.filter_system),
-                                tint =
-                                    if (showSystem) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    },
-                            )
-                        }
-                    }
-                },
             )
         },
         bottomBar = {
@@ -302,7 +295,6 @@ private fun MainScreen() {
 
             Tab.Apps -> {
                 AppPickerScreen(
-                    showSystem = showSystem,
                     modifier = Modifier.padding(innerPadding),
                 )
             }
@@ -410,15 +402,13 @@ data class InstalledModules(
 )
 
 @Composable
-fun AppPickerScreen(
-    showSystem: Boolean,
-    modifier: Modifier = Modifier,
-) {
+fun AppPickerScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val pm = context.packageManager
 
     var allApps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
     var installed by remember { mutableStateOf(InstalledModules()) }
+    var showSystem by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
@@ -436,25 +426,33 @@ fun AppPickerScreen(
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             // Detect which native modules are installed
-            val (_, detectOut) = suExec(
-                "echo kmod=\$([ -d $KMOD_MODULE_DIR ] && echo 1 || echo 0);" +
-                    "echo zygisk=\$([ -d $ZYGISK_MODULE_DIR ] && echo 1 || echo 0)",
-            )
-            val flags = detectOut.lines()
-                .filter { it.contains("=") }
-                .associate {
-                    val (k, v) = it.split("=", limit = 2)
-                    k to (v == "1")
-                }
-            installed = InstalledModules(
-                kmod = flags["kmod"] == true,
-                zygisk = flags["zygisk"] == true,
-            )
+            val (_, detectOut) =
+                suExec(
+                    "echo kmod=\$([ -d $KMOD_MODULE_DIR ] && echo 1 || echo 0);" +
+                        "echo zygisk=\$([ -d $ZYGISK_MODULE_DIR ] && echo 1 || echo 0)",
+                )
+            val flags =
+                detectOut
+                    .lines()
+                    .filter { it.contains("=") }
+                    .associate {
+                        val (k, v) = it.split("=", limit = 2)
+                        k to (v == "1")
+                    }
+            installed =
+                InstalledModules(
+                    kmod = flags["kmod"] == true,
+                    zygisk = flags["zygisk"] == true,
+                )
 
             // Read 3 separate target lists
             fun readTargets(path: String): Set<String> {
                 val (_, raw) = suExec("cat $path 2>/dev/null || true")
-                return raw.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.toSet()
+                return raw
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+                    .toSet()
             }
             val kmodTargets = readTargets(KMOD_TARGETS)
             val zygiskTargets = readTargets(ZYGISK_TARGETS)
@@ -544,6 +542,34 @@ fun AppPickerScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
         ) {
+            // Hint card
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors =
+                    CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 8.dp),
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.apps_hint_toggles),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.apps_hint_zygisk),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                    )
+                }
+            }
+
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -554,6 +580,25 @@ fun AppPickerScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
             )
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showSystem = !showSystem }
+                        .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = showSystem,
+                    onCheckedChange = { showSystem = it },
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.filter_show_system),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
 
             if (loading) {
                 Box(
@@ -569,28 +614,34 @@ fun AppPickerScreen(
                             app = app,
                             installed = installed,
                             onToggle = { layer ->
-                                allApps = allApps.map {
-                                    if (it.packageName != app.packageName) it
-                                    else when (layer) {
-                                        Layer.KMOD -> it.copy(kmod = !it.kmod)
-                                        Layer.ZYGISK -> it.copy(zygisk = !it.zygisk)
-                                        Layer.LSPOSED -> it.copy(lsposed = !it.lsposed)
+                                allApps =
+                                    allApps.map {
+                                        if (it.packageName != app.packageName) {
+                                            it
+                                        } else {
+                                            when (layer) {
+                                                Layer.KMOD -> it.copy(kmod = !it.kmod)
+                                                Layer.ZYGISK -> it.copy(zygisk = !it.zygisk)
+                                                Layer.LSPOSED -> it.copy(lsposed = !it.lsposed)
+                                            }
+                                        }
                                     }
-                                }
                                 dirty = true
                             },
                             onToggleAll = {
-                                allApps = allApps.map {
-                                    if (it.packageName != app.packageName) it
-                                    else {
-                                        val newState = !it.anySelected
-                                        it.copy(
-                                            kmod = if (installed.kmod) newState else false,
-                                            zygisk = if (installed.zygisk) newState else false,
-                                            lsposed = newState,
-                                        )
+                                allApps =
+                                    allApps.map {
+                                        if (it.packageName != app.packageName) {
+                                            it
+                                        } else {
+                                            val newState = !it.anySelected
+                                            it.copy(
+                                                kmod = if (installed.kmod) newState else false,
+                                                zygisk = if (installed.zygisk) newState else false,
+                                                lsposed = newState,
+                                            )
+                                        }
                                     }
-                                }
                                 dirty = true
                             },
                         )
@@ -611,9 +662,10 @@ fun AppPickerScreen(
             val header = context.getString(R.string.save_header_comment)
 
             try {
-                val (exitCode, _) = suExecAsync(
-                    buildSaveCommand(header, kmodPkgs, zygiskPkgs, lsposedPkgs),
-                )
+                val (exitCode, _) =
+                    suExecAsync(
+                        buildSaveCommand(header, kmodPkgs, zygiskPkgs, lsposedPkgs),
+                    )
                 val totalSelected = allApps.count { it.anySelected }
                 if (exitCode == 0) {
                     snackMessage = context.getString(R.string.save_success, totalSelected)
@@ -681,7 +733,10 @@ private fun buildSaveCommand(
     return parts.joinToString(" ; ")
 }
 
-private fun buildUidResolver(packages: List<String>, outputFile: String): String =
+private fun buildUidResolver(
+    packages: List<String>,
+    outputFile: String,
+): String =
     buildString {
         append("ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"")
         append("; UIDS=\"\"")
