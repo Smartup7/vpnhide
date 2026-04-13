@@ -74,16 +74,15 @@ After changing targets, force-stop and restart the affected apps — hooks take 
 
 ## Verify
 
-Install `vpnhide-test.apk` from the release, add it to the target list via WebUI, and launch it with VPN active. All checks should show PASS.
+Open the VPN Hide app, switch to the Diagnostics tab, and run all checks with VPN active. The app auto-adds itself to the target list. All 26 checks should show PASS.
 
 ## Components
 
 | Directory | What | How |
 |---|---|---|
 | **[kmod/](kmod/)** | Kernel module (C) | `kretprobe` hooks in kernel space. Zero footprint in the target app's process. ([details](kmod/README.md)) |
-| **[lsposed/](lsposed/)** | LSPosed module + target picker app (Kotlin) | Hooks `writeToParcel` in `system_server` for per-UID Binder filtering. The APK also serves as the target management UI. ([details](lsposed/README.md)) |
+| **[lsposed/](lsposed/)** | LSPosed module + app (Kotlin + Rust) | Hooks `writeToParcel` in `system_server` for per-UID Binder filtering. The APK serves as target picker, diagnostics (26 checks), and module management UI. ([details](lsposed/README.md)) |
 | **[zygisk/](zygisk/)** | Zygisk module (Rust) | Inline-hooks `libc.so` in the target app's process. Alternative to kmod. ([details](zygisk/README.md)) |
-| **[test-app/](test-app/)** | Diagnostic app (Kotlin + Rust) | 26 checks covering all detection vectors. |
 
 ## Detection coverage
 
@@ -124,8 +123,7 @@ Rows 1-6, 21, and 24 are the only vectors reachable by regular apps. Everything 
 
 - **kmod**: `cd kmod && make && ./build-zip.sh` — see [kmod/BUILDING.md](kmod/BUILDING.md)
 - **zygisk**: `cd zygisk && ./build-zip.sh` (Rust + NDK + cargo-ndk)
-- **lsposed**: `cd lsposed && ./gradlew assembleDebug` (JDK 17)
-- **test-app**: `cd test-app && ./gradlew installDebug` (JDK 17 + Rust + NDK)
+- **lsposed**: `cd lsposed && ./gradlew assembleDebug` (JDK 17 + Rust + NDK + cargo-ndk)
 
 ## Verified against
 

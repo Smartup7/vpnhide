@@ -72,16 +72,15 @@ vpnhide решает обе проблемы двухуровневой архи
 
 ## Проверка
 
-Установите `vpnhide-test.apk` из релиза, добавьте его в список целевых приложений и запустите при активном VPN. Все проверки должны показать PASS.
+Откройте приложение VPN Hide, перейдите на вкладку «Диагностика» и запустите все проверки при активном VPN. Приложение автоматически добавит себя в список целевых. Все 26 проверок должны показать PASS.
 
 ## Компоненты
 
 | Директория | Что | Как |
 |---|---|---|
 | **[kmod/](kmod/)** | Модуль ядра (C) | Хуки `kretprobe` в пространстве ядра. Нулевой след в процессе приложения. ([подробнее](kmod/README.md)) |
-| **[lsposed/](lsposed/)** | LSPosed-модуль + приложение выбора целей (Kotlin) | Хуки `writeToParcel` в `system_server` для per-UID фильтрации Binder. APK также служит UI для управления целями. ([подробнее](lsposed/README.md)) |
+| **[lsposed/](lsposed/)** | LSPosed-модуль + приложение (Kotlin + Rust) | Хуки `writeToParcel` в `system_server` для per-UID фильтрации Binder. APK служит для выбора целей, диагностики (26 проверок) и управления модулями. ([подробнее](lsposed/README.md)) |
 | **[zygisk/](zygisk/)** | Zygisk-модуль (Rust) | Inline-хуки `libc.so` в процессе приложения. Альтернатива kmod. ([подробнее](zygisk/README.md)) |
-| **[test-app/](test-app/)** | Диагностическое приложение (Kotlin + Rust) | 26 проверок, покрывающих все векторы обнаружения. |
 
 ## Покрытие обнаружения
 
@@ -122,8 +121,7 @@ vpnhide решает обе проблемы двухуровневой архи
 
 - **kmod**: `cd kmod && make && ./build-zip.sh` — см. [kmod/BUILDING.md](kmod/BUILDING.md)
 - **zygisk**: `cd zygisk && ./build-zip.sh` (Rust + NDK + cargo-ndk)
-- **lsposed**: `cd lsposed && ./gradlew assembleDebug` (JDK 17)
-- **test-app**: `cd test-app && ./gradlew installDebug` (JDK 17 + Rust + NDK)
+- **lsposed**: `cd lsposed && ./gradlew assembleDebug` (JDK 17 + Rust + NDK + cargo-ndk)
 
 ## Проверено на
 
