@@ -148,9 +148,9 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          KEYSTORE_PATH="${{ github.workspace }}/lsposed/release.jks"
+          KEYSTORE_PATH="$GITHUB_WORKSPACE/lsposed/release.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
-          cat > "${{ github.workspace }}/lsposed/keystore.properties" <<EOF
+          cat > "$GITHUB_WORKSPACE/lsposed/keystore.properties" <<EOF
           password=$KEYSTORE_PASSWORD
           keyAlias=$KEY_ALIAS
           storeFile=$KEYSTORE_PATH
@@ -158,7 +158,7 @@ jobs:
 
       - name: Build APK
         run: |
-          cd "${{ github.workspace }}/lsposed" && ./gradlew --no-daemon assembleRelease
+          cd "$GITHUB_WORKSPACE/lsposed" && ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/vpnhide-lsposed.apk"
 
       - name: Upload artifact
