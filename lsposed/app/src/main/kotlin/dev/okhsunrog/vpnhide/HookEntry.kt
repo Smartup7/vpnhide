@@ -51,6 +51,7 @@ class HookEntry : IXposedHookLoadPackage {
         if (hookInstalled.compareAndSet(false, true)) {
             XposedBridge.log("VpnHide: system_server detected, installing Binder hooks")
             installSystemServerHooks()
+            writeHookStatusFile()
         }
     }
 
@@ -141,6 +142,32 @@ class HookEntry : IXposedHookLoadPackage {
         tryHook("NI.writeToParcel") { hookNIWriteToParcel() }
         tryHook("LP.writeToParcel") { hookLPWriteToParcel() }
         tryHook("FileObserver") { watchTargetUidsFile() }
+    }
+
+    /**
+     * Write a status file so the VPN Hide app can verify hooks are active.
+     * Includes boot_id to distinguish stale files from previous boots.
+     */
+    private fun writeHookStatusFile() {
+        try {
+            val bootId = File("/proc/sys/kernel/random/boot_id").readText().trim()
+            val timestamp = System.currentTimeMillis() / 1000
+            val version = try {
+                val atClass = Class.forName("android.app.ActivityThread")
+                val currentApp = atClass.getMethod("currentApplication").invoke(null)
+                val pm = currentApp.javaClass.getMethod("getPackageManager").invoke(currentApp)
+                val pi = pm.javaClass.getMethod("getPackageInfo", String::class.java, Int::class.java)
+                    .invoke(pm, "dev.okhsunrog.vpnhide", 0)
+                pi.javaClass.getField("versionName").get(pi) as? String ?: "unknown"
+            } catch (_: Throwable) { "unknown" }
+            val content = "version=$version\nboot_id=$bootId\ntimestamp=$timestamp\n"
+            val statusFile = File(HOOK_STATUS_FILE)
+            statusFile.writeText(content)
+            statusFile.setReadable(true, false)
+            XposedBridge.log("VpnHide: wrote hook status file (version=$version, boot_id=$bootId)")
+        } catch (t: Throwable) {
+            XposedBridge.log("VpnHide: failed to write hook status: ${t.message}")
+        }
     }
 
     /**
@@ -365,5 +392,6 @@ class HookEntry : IXposedHookLoadPackage {
         private const val NET_CAPABILITY_NOT_VPN = 15
         private const val TYPE_VPN = 17
         private const val TYPE_WIFI = 1
+        const val HOOK_STATUS_FILE = "/data/system/vpnhide_hook_active"
     }
 }

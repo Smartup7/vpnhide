@@ -3,6 +3,7 @@
     <string name="module_description">Скрывает активное VPN-соединение от выбранных приложений — NetworkCapabilities, NetworkInfo, NetworkInterface, LinkProperties, /proc/net</string>
 
     <!-- Navigation -->
+    <string name="tab_dashboard">Обзор</string>
     <string name="tab_apps">Приложения</string>
     <string name="tab_diagnostics">Диагностика</string>
 
@@ -22,6 +23,30 @@
     <string name="save_failed_exit">Ошибка сохранения (код выхода %d)</string>
     <string name="save_failed_error">Ошибка сохранения: %s</string>
     <string name="save_failed_root">Ошибка сохранения: root-доступ запрещён</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_modules">Модули</string>
+    <string name="dashboard_kmod">Модуль ядра</string>
+    <string name="dashboard_zygisk">Zygisk</string>
+    <string name="dashboard_not_installed">Не установлен</string>
+    <string name="dashboard_installed_inactive">Установлен, неактивен</string>
+    <string name="dashboard_active_targets">Активен · целей: %d</string>
+    <string name="dashboard_reboot_needed">Требуется перезагрузка</string>
+    <string name="dashboard_protection">Статус защиты</string>
+    <string name="dashboard_native_protection">Нативный уровень</string>
+    <string name="dashboard_java_protection">Java API уровень</string>
+    <string name="dashboard_protection_ok">ОК</string>
+    <string name="dashboard_protection_partial">Частично</string>
+    <string name="dashboard_protection_fail">Не работает</string>
+    <string name="dashboard_protection_unknown">Не проверено</string>
+    <string name="dashboard_protection_no_module">Нет модуля</string>
+    <string name="dashboard_protection_hooks_inactive">Хуки неактивны</string>
+    <string name="dashboard_needs_restart">Приложение только что добавлено в список целей. Перезапустите приложение для проверки защиты.</string>
+    <string name="dashboard_no_vpn">VPN не активен. Включите VPN для проверки защиты.</string>
+    <string name="dashboard_issues">Проблемы (%d)</string>
+    <string name="dashboard_issue_no_native">Нативный модуль не установлен. Установите kmod или zygisk для полной защиты.</string>
+    <string name="dashboard_issue_reboot">Хуки LSPosed требуют перезагрузки для активации.</string>
+    <string name="dashboard_issue_no_targets">Целевые приложения не настроены. Перейдите во вкладку «Приложения».</string>
 
     <!-- Diagnostics -->
     <string name="summary_running">Выполняется&#8230;</string>

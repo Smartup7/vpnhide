@@ -3,6 +3,7 @@
     <string name="module_description">Hides active VPN connection from selected apps — NetworkCapabilities, NetworkInfo, NetworkInterface, LinkProperties, /proc/net</string>
 
     <!-- Navigation -->
+    <string name="tab_dashboard">Dashboard</string>
     <string name="tab_apps">Apps</string>
     <string name="tab_diagnostics">Diagnostics</string>
 
@@ -38,6 +39,30 @@
     <string name="banner_network_blocked">Network access is disabled for this app. ioctl checks (SIOCGIFFLAGS, SIOCGIFMTU, SIOCGIFCONF) cannot run without it. Enable in Settings → Apps → VPN Hide → Mobile data &amp; Wi-Fi.</string>
     <string name="section_native">Native level (kmod / zygisk)</string>
     <string name="section_java">Java API level (LSPosed)</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_modules">Modules</string>
+    <string name="dashboard_kmod">Kernel module</string>
+    <string name="dashboard_zygisk">Zygisk</string>
+    <string name="dashboard_not_installed">Not installed</string>
+    <string name="dashboard_installed_inactive">Installed, inactive</string>
+    <string name="dashboard_active_targets">Active · %d target(s)</string>
+    <string name="dashboard_reboot_needed">Reboot needed</string>
+    <string name="dashboard_protection">Protection status</string>
+    <string name="dashboard_native_protection">Native level</string>
+    <string name="dashboard_java_protection">Java API level</string>
+    <string name="dashboard_protection_ok">OK</string>
+    <string name="dashboard_protection_partial">Partial</string>
+    <string name="dashboard_protection_fail">Not working</string>
+    <string name="dashboard_protection_unknown">Not checked</string>
+    <string name="dashboard_protection_no_module">No module</string>
+    <string name="dashboard_protection_hooks_inactive">Hooks inactive</string>
+    <string name="dashboard_needs_restart">App was just added to targets. Restart the app to check protection.</string>
+    <string name="dashboard_no_vpn">No active VPN. Turn on VPN to check protection status.</string>
+    <string name="dashboard_issues">Issues (%d)</string>
+    <string name="dashboard_issue_no_native">No native module installed. Install kmod or zygisk for full protection.</string>
+    <string name="dashboard_issue_reboot">LSPosed hooks need a reboot to activate.</string>
+    <string name="dashboard_issue_no_targets">No target apps configured. Go to Apps tab to select apps.</string>
 
     <!-- Native check names -->
     <string name="check_ioctl_flags">ioctl SIOCGIFFLAGS tun0</string>

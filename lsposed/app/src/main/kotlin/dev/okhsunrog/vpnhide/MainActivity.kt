@@ -14,9 +14,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,16 +41,23 @@ private const val TAG = "VpnHide"
 internal const val KMOD_TARGETS = "/data/adb/vpnhide_kmod/targets.txt"
 internal const val ZYGISK_TARGETS = "/data/adb/vpnhide_zygisk/targets.txt"
 internal const val ZYGISK_MODULE_TARGETS = "/data/adb/modules/vpnhide_zygisk/targets.txt"
+internal const val LSPOSED_TARGETS = "/data/adb/vpnhide_lsposed/targets.txt"
 internal const val PROC_TARGETS = "/proc/vpnhide_targets"
 internal const val SS_UIDS_FILE = "/data/system/vpnhide_uids.txt"
+internal const val KMOD_MODULE_DIR = "/data/adb/modules/vpnhide_kmod"
+internal const val ZYGISK_MODULE_DIR = "/data/adb/modules/vpnhide_zygisk"
 
 data class AppEntry(
     val packageName: String,
     val label: String,
     val icon: Drawable?,
     val isSystem: Boolean,
-    val selected: Boolean,
-)
+    val kmod: Boolean = false,
+    val zygisk: Boolean = false,
+    val lsposed: Boolean = false,
+) {
+    val anySelected get() = kmod || zygisk || lsposed
+}
 
 private sealed class RootState {
     data object Checking : RootState()
@@ -126,12 +135,12 @@ fun VpnHideApp() {
     }
 }
 
-private enum class Tab { Apps, Diagnostics }
+private enum class Tab { Dashboard, Apps, Diagnostics }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScreen() {
-    var currentTab by remember { mutableStateOf(Tab.Apps) }
+    var currentTab by remember { mutableStateOf(Tab.Dashboard) }
     var showSystem by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -164,9 +173,15 @@ private fun MainScreen() {
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
+                    selected = currentTab == Tab.Dashboard,
+                    onClick = { currentTab = Tab.Dashboard },
+                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    label = { Text(stringResource(R.string.tab_dashboard)) },
+                )
+                NavigationBarItem(
                     selected = currentTab == Tab.Apps,
                     onClick = { currentTab = Tab.Apps },
-                    icon = { Icon(Icons.Default.List, contentDescription = null) },
+                    icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
                     label = { Text(stringResource(R.string.tab_apps)) },
                 )
                 NavigationBarItem(
@@ -179,6 +194,10 @@ private fun MainScreen() {
         },
     ) { innerPadding ->
         when (currentTab) {
+            Tab.Dashboard -> {
+                DashboardScreen(Modifier.padding(innerPadding))
+            }
+
             Tab.Apps -> {
                 AppPickerScreen(
                     showSystem = showSystem,
@@ -279,6 +298,12 @@ private fun RootDeniedScreen() {
     }
 }
 
+/** Which installed modules are present (detected once at load). */
+data class InstalledModules(
+    val kmod: Boolean = false,
+    val zygisk: Boolean = false,
+)
+
 @Composable
 fun AppPickerScreen(
     showSystem: Boolean,
@@ -288,6 +313,7 @@ fun AppPickerScreen(
     val pm = context.packageManager
 
     var allApps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
+    var installed by remember { mutableStateOf(InstalledModules()) }
     var searchQuery by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
@@ -304,20 +330,36 @@ fun AppPickerScreen(
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val (_, targetsRaw) =
-                suExec(
-                    "cat $KMOD_TARGETS 2>/dev/null || cat $ZYGISK_TARGETS 2>/dev/null || true",
-                )
-            val selected =
-                targetsRaw
-                    .lines()
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() && !it.startsWith("#") }
-                    .toSet()
+            // Detect which native modules are installed
+            val (_, detectOut) = suExec(
+                "echo kmod=\$([ -d $KMOD_MODULE_DIR ] && echo 1 || echo 0);" +
+                    "echo zygisk=\$([ -d $ZYGISK_MODULE_DIR ] && echo 1 || echo 0)",
+            )
+            val flags = detectOut.lines()
+                .filter { it.contains("=") }
+                .associate {
+                    val (k, v) = it.split("=", limit = 2)
+                    k to (v == "1")
+                }
+            installed = InstalledModules(
+                kmod = flags["kmod"] == true,
+                zygisk = flags["zygisk"] == true,
+            )
 
+            // Read 3 separate target lists
+            fun readTargets(path: String): Set<String> {
+                val (_, raw) = suExec("cat $path 2>/dev/null || true")
+                return raw.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }.toSet()
+            }
+            val kmodTargets = readTargets(KMOD_TARGETS)
+            val zygiskTargets = readTargets(ZYGISK_TARGETS)
+            val lsposedTargets = readTargets(LSPOSED_TARGETS)
+
+            val selfPkg = context.packageName
             val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
             val entries =
                 installedApps
+                    .filter { it.packageName != selfPkg }
                     .map { info ->
                         val label =
                             try {
@@ -332,14 +374,17 @@ fun AppPickerScreen(
                                 null
                             }
                         val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                        val pkg = info.packageName
                         AppEntry(
-                            packageName = info.packageName,
+                            packageName = pkg,
                             label = label,
                             icon = icon,
                             isSystem = isSystem,
-                            selected = info.packageName in selected,
+                            kmod = pkg in kmodTargets,
+                            zygisk = pkg in zygiskTargets,
+                            lsposed = pkg in lsposedTargets,
                         )
-                    }.sortedWith(compareByDescending<AppEntry> { it.selected }.thenBy { it.label.lowercase() })
+                    }.sortedWith(compareByDescending<AppEntry> { it.anySelected }.thenBy { it.label.lowercase() })
 
             allApps = entries
             loading = false
@@ -350,12 +395,12 @@ fun AppPickerScreen(
         remember(allApps, searchQuery, showSystem) {
             val q = searchQuery.trim().lowercase()
             allApps.filter { app ->
-                (showSystem || !app.isSystem || app.selected) &&
+                (showSystem || !app.isSystem || app.anySelected) &&
                     (q.isEmpty() || app.label.lowercase().contains(q) || app.packageName.lowercase().contains(q))
             }
         }
 
-    val selectedCount = remember(allApps) { allApps.count { it.selected } }
+    val selectedCount = remember(allApps) { allApps.count { it.anySelected } }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -417,11 +462,30 @@ fun AppPickerScreen(
                     items(filteredApps, key = { it.packageName }) { app ->
                         AppRow(
                             app = app,
-                            onToggle = {
-                                allApps =
-                                    allApps.map {
-                                        if (it.packageName == app.packageName) it.copy(selected = !it.selected) else it
+                            installed = installed,
+                            onToggle = { layer ->
+                                allApps = allApps.map {
+                                    if (it.packageName != app.packageName) it
+                                    else when (layer) {
+                                        Layer.KMOD -> it.copy(kmod = !it.kmod)
+                                        Layer.ZYGISK -> it.copy(zygisk = !it.zygisk)
+                                        Layer.LSPOSED -> it.copy(lsposed = !it.lsposed)
                                     }
+                                }
+                                dirty = true
+                            },
+                            onToggleAll = {
+                                allApps = allApps.map {
+                                    if (it.packageName != app.packageName) it
+                                    else {
+                                        val newState = !it.anySelected
+                                        it.copy(
+                                            kmod = if (installed.kmod) newState else false,
+                                            zygisk = if (installed.zygisk) newState else false,
+                                            lsposed = newState,
+                                        )
+                                    }
+                                }
                                 dirty = true
                             },
                         )
@@ -434,17 +498,18 @@ fun AppPickerScreen(
     // Save effect
     if (saving) {
         LaunchedEffect(Unit) {
-            val selected = allApps.filter { it.selected }.map { it.packageName }.sorted()
+            val kmodPkgs = allApps.filter { it.kmod }.map { it.packageName }.sorted()
+            val zygiskPkgs = allApps.filter { it.zygisk }.map { it.packageName }.sorted()
+            val lsposedPkgs = allApps.filter { it.lsposed }.map { it.packageName }.sorted()
             val header = context.getString(R.string.save_header_comment)
-            val body =
-                "$header\n" +
-                    selected.joinToString("\n") +
-                    if (selected.isNotEmpty()) "\n" else ""
 
             try {
-                val (exitCode, _) = suExecAsync(buildSaveCommand(body, selected))
+                val (exitCode, _) = suExecAsync(
+                    buildSaveCommand(header, kmodPkgs, zygiskPkgs, lsposedPkgs),
+                )
+                val totalSelected = allApps.count { it.anySelected }
                 if (exitCode == 0) {
-                    snackMessage = context.getString(R.string.save_success, selected.size)
+                    snackMessage = context.getString(R.string.save_success, totalSelected)
                 } else if (exitCode == -1) {
                     snackMessage = context.getString(R.string.save_failed_root)
                     dirty = true
@@ -461,67 +526,83 @@ fun AppPickerScreen(
     }
 }
 
+internal enum class Layer { KMOD, ZYGISK, LSPOSED }
+
 private fun buildSaveCommand(
-    body: String,
-    selectedPackages: List<String>,
+    header: String,
+    kmodPkgs: List<String>,
+    zygiskPkgs: List<String>,
+    lsposedPkgs: List<String>,
 ): String {
-    val b64 = android.util.Base64.encodeToString(body.toByteArray(), android.util.Base64.NO_WRAP)
+    fun encodeBody(pkgs: List<String>): String {
+        val body = "$header\n" + pkgs.joinToString("\n") + if (pkgs.isNotEmpty()) "\n" else ""
+        return android.util.Base64.encodeToString(body.toByteArray(), android.util.Base64.NO_WRAP)
+    }
 
     val parts = mutableListOf<String>()
 
-    // Write to kmod targets if dir exists
-    parts += "if [ -d /data/adb/vpnhide_kmod ]; then echo '$b64' | base64 -d > $KMOD_TARGETS && chmod 644 $KMOD_TARGETS; fi"
+    // Write kmod targets
+    val kmodB64 = encodeBody(kmodPkgs)
+    parts += "if [ -d /data/adb/vpnhide_kmod ]; then echo '$kmodB64' | base64 -d > $KMOD_TARGETS && chmod 644 $KMOD_TARGETS; fi"
 
-    // Write to zygisk targets if dir exists
-    parts += "if [ -d /data/adb/vpnhide_zygisk ]; then echo '$b64' | base64 -d > $ZYGISK_TARGETS && chmod 644 $ZYGISK_TARGETS; fi"
-
-    // Copy to module dir for Magisk SELinux compat
+    // Write zygisk targets
+    val zygiskB64 = encodeBody(zygiskPkgs)
+    parts += "if [ -d /data/adb/vpnhide_zygisk ]; then echo '$zygiskB64' | base64 -d > $ZYGISK_TARGETS && chmod 644 $ZYGISK_TARGETS; fi"
     parts += "cp $ZYGISK_TARGETS $ZYGISK_MODULE_TARGETS 2>/dev/null; true"
 
-    // Resolve UIDs and write to /proc/vpnhide_targets + /data/system/vpnhide_uids.txt
-    if (selectedPackages.isNotEmpty()) {
-        val uidResolution =
-            buildString {
-                append("ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"")
-                append("; UIDS=\"\"")
-                for (pkg in selectedPackages) {
-                    append("; U=\$(echo \"\$ALL_PKGS\" | grep '^package:$pkg ' | sed 's/.*uid://')")
-                    append("; if [ -n \"\$U\" ]; then if [ -z \"\$UIDS\" ]; then UIDS=\"\$U\"; else UIDS=\"\$UIDS")
-                    append("\n")
-                    append("\$U\"; fi; fi")
-                }
-                append("; if [ -n \"\$UIDS\" ]; then echo \"\$UIDS\" > $PROC_TARGETS 2>/dev/null; echo \"\$UIDS\" > $SS_UIDS_FILE")
-                append("; else echo > $PROC_TARGETS 2>/dev/null; echo > $SS_UIDS_FILE; fi")
-                append("; chmod 644 $SS_UIDS_FILE 2>/dev/null")
-                append("; chcon u:object_r:system_data_file:s0 $SS_UIDS_FILE 2>/dev/null")
-            }
-        parts += uidResolution
+    // Write lsposed targets (always — the dir is created by service.sh or us)
+    val lsposedB64 = encodeBody(lsposedPkgs)
+    parts += "mkdir -p /data/adb/vpnhide_lsposed"
+    parts += "echo '$lsposedB64' | base64 -d > $LSPOSED_TARGETS && chmod 644 $LSPOSED_TARGETS"
+
+    // Resolve kmod UIDs → /proc/vpnhide_targets
+    if (kmodPkgs.isNotEmpty()) {
+        parts += buildUidResolver(kmodPkgs, PROC_TARGETS)
     } else {
         parts += "echo > $PROC_TARGETS 2>/dev/null; true"
+    }
+
+    // Resolve lsposed UIDs → /data/system/vpnhide_uids.txt
+    if (lsposedPkgs.isNotEmpty()) {
+        parts += buildUidResolver(lsposedPkgs, SS_UIDS_FILE)
+        parts += "chmod 644 $SS_UIDS_FILE 2>/dev/null"
+        parts += "chcon u:object_r:system_data_file:s0 $SS_UIDS_FILE 2>/dev/null"
+    } else {
         parts += "echo > $SS_UIDS_FILE 2>/dev/null; true"
     }
 
     return parts.joinToString(" ; ")
 }
 
+private fun buildUidResolver(packages: List<String>, outputFile: String): String =
+    buildString {
+        append("ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"")
+        append("; UIDS=\"\"")
+        for (pkg in packages) {
+            append("; U=\$(echo \"\$ALL_PKGS\" | grep '^package:$pkg ' | sed 's/.*uid://')")
+            append("; if [ -n \"\$U\" ]; then if [ -z \"\$UIDS\" ]; then UIDS=\"\$U\"; else UIDS=\"\$UIDS")
+            append("\n")
+            append("\$U\"; fi; fi")
+        }
+        append("; if [ -n \"\$UIDS\" ]; then echo \"\$UIDS\" > $outputFile 2>/dev/null")
+        append("; else echo > $outputFile 2>/dev/null; fi")
+    }
+
 @Composable
 private fun AppRow(
     app: AppEntry,
-    onToggle: () -> Unit,
+    installed: InstalledModules,
+    onToggle: (Layer) -> Unit,
+    onToggleAll: () -> Unit,
 ) {
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onToggle)
+                .clickable(onClick = onToggleAll)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(
-            checked = app.selected,
-            onCheckedChange = { onToggle() },
-        )
-        Spacer(Modifier.width(12.dp))
         app.icon?.let { drawable ->
             Image(
                 bitmap = drawable.toBitmap(48, 48).asImageBitmap(),
@@ -543,6 +624,40 @@ private fun AppRow(
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                LayerChip("L", app.lsposed, true) { onToggle(Layer.LSPOSED) }
+                if (installed.kmod) {
+                    LayerChip("K", app.kmod, true) { onToggle(Layer.KMOD) }
+                }
+                if (installed.zygisk) {
+                    LayerChip("Z", app.zygisk, true) { onToggle(Layer.ZYGISK) }
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun LayerChip(
+    label: String,
+    enabled: Boolean,
+    available: Boolean,
+    onClick: () -> Unit,
+) {
+    val containerColor = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = containerColor,
+        modifier = Modifier.clickable(enabled = available, onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = contentColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
     }
 }

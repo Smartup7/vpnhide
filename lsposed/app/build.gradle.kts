@@ -94,6 +94,9 @@ dependencies {
     // Xposed API — compileOnly so it's not bundled into the APK.
     compileOnly("de.robv.android.xposed:api:82")
 
+    // XML theme for splash screen (DayNight support)
+    implementation("com.google.android.material:material:1.12.0")
+
     // Compose UI
     implementation(libs.core.ktx)
     implementation(libs.activity.compose)
