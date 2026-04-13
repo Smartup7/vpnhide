@@ -3,7 +3,6 @@ package dev.okhsunrog.vpnhide
 import android.net.LinkProperties
 import android.net.NetworkCapabilities
 import android.net.NetworkInfo
-import android.net.RouteInfo
 import android.os.Binder
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -193,76 +192,52 @@ class HookEntry : IXposedHookLoadPackage {
 
     /**
      * Hook NetworkCapabilities.writeToParcel in system_server.
-     * Before serialization, strip VPN transport if the Binder caller
-     * is a target UID. Saves and restores original values to avoid
-     * corrupting ConnectivityService's internal state.
+     * For target UIDs, creates a copy with VPN stripped and writes
+     * the copy to the Parcel instead of the original. The original
+     * object is never mutated, avoiding race conditions with
+     * ConnectivityService threads.
      */
     private fun hookNCWriteToParcel() {
+        val writingCopy = ThreadLocal<Boolean>()
         XposedHelpers.findAndHookMethod(
             NetworkCapabilities::class.java,
             "writeToParcel",
             android.os.Parcel::class.java,
             Integer.TYPE,
             object : XC_MethodHook() {
-                private val savedTransport = ThreadLocal<Long>()
-                private val savedCaps = ThreadLocal<Long>()
-                private val savedTi = ThreadLocal<Any?>()
-
                 override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (writingCopy.get() == true) return
                     if (!loadTargetUids().contains(Binder.getCallingUid())) return
 
-                    val nc = param.thisObject
+                    val nc = param.thisObject as NetworkCapabilities
                     try {
                         val transportTypes = XposedHelpers.getLongField(nc, "mTransportTypes")
                         val vpnBit = 1L shl TRANSPORT_VPN
                         if (transportTypes and vpnBit == 0L) return
 
-                        // Read all original values before mutating anything
-                        val caps = XposedHelpers.getLongField(nc, "mNetworkCapabilities")
-                        val ti =
-                            try {
-                                XposedHelpers.getObjectField(nc, "mTransportInfo")
-                            } catch (_: Throwable) {
-                                null
-                            }
-
-                        // Mutate — if any step fails, restore everything
+                        val copy = NetworkCapabilities(nc)
+                        XposedHelpers.setLongField(copy, "mTransportTypes", transportTypes and vpnBit.inv())
+                        val caps = XposedHelpers.getLongField(copy, "mNetworkCapabilities")
+                        XposedHelpers.setLongField(copy, "mNetworkCapabilities", caps or (1L shl NET_CAPABILITY_NOT_VPN))
                         try {
-                            XposedHelpers.setLongField(nc, "mTransportTypes", transportTypes and vpnBit.inv())
-                            XposedHelpers.setLongField(nc, "mNetworkCapabilities", caps or (1L shl NET_CAPABILITY_NOT_VPN))
+                            val ti = XposedHelpers.getObjectField(copy, "mTransportInfo")
                             if (ti != null && ti.javaClass.name == "android.net.VpnTransportInfo") {
-                                XposedHelpers.setObjectField(nc, "mTransportInfo", null)
+                                XposedHelpers.setObjectField(copy, "mTransportInfo", null)
                             }
-                        } catch (t: Throwable) {
-                            // Restore on partial mutation failure
-                            XposedHelpers.setLongField(nc, "mTransportTypes", transportTypes)
-                            XposedHelpers.setLongField(nc, "mNetworkCapabilities", caps)
-                            XposedHelpers.setObjectField(nc, "mTransportInfo", ti)
-                            throw t
+                        } catch (_: Throwable) {
                         }
 
-                        // Only save after all mutations succeeded
-                        savedTransport.set(transportTypes)
-                        savedCaps.set(caps)
-                        savedTi.set(ti)
+                        val parcel = param.args[0] as android.os.Parcel
+                        val flags = param.args[1] as Int
+                        writingCopy.set(true)
+                        try {
+                            copy.writeToParcel(parcel, flags)
+                        } finally {
+                            writingCopy.set(false)
+                        }
+                        param.result = null
                     } catch (t: Throwable) {
-                        XposedBridge.log("VpnHide: NC.writeToParcel before error: ${t.message}")
-                    }
-                }
-
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val origTransport = savedTransport.get() ?: return
-                    savedTransport.remove()
-                    val origCaps = savedCaps.get()
-                    savedCaps.remove()
-                    val origTi = savedTi.get()
-                    savedTi.remove()
-                    val nc = param.thisObject
-                    try {
-                        XposedHelpers.setLongField(nc, "mTransportTypes", origTransport)
-                        if (origCaps != null) XposedHelpers.setLongField(nc, "mNetworkCapabilities", origCaps)
-                        XposedHelpers.setObjectField(nc, "mTransportInfo", origTi)
-                    } catch (_: Throwable) {
+                        XposedBridge.log("VpnHide: NC.writeToParcel error: ${t.message}")
                     }
                 }
             },
@@ -272,39 +247,49 @@ class HookEntry : IXposedHookLoadPackage {
 
     /**
      * Hook NetworkInfo.writeToParcel — disguise VPN NetworkInfo for target callers.
-     * Instead of skipping writeToParcel (which would corrupt the Parcel stream
-     * since the non-null flag is already written by the AIDL stub), temporarily
-     * change the type to WIFI and let serialization proceed normally.
+     * Creates a copy with type changed from VPN to WIFI, writes the copy.
      */
+    @Suppress("DEPRECATION")
     private fun hookNIWriteToParcel() {
+        val writingCopy = ThreadLocal<Boolean>()
         XposedHelpers.findAndHookMethod(
             NetworkInfo::class.java,
             "writeToParcel",
             android.os.Parcel::class.java,
             Integer.TYPE,
             object : XC_MethodHook() {
-                private val savedType = ThreadLocal<Int>()
-
                 override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (writingCopy.get() == true) return
                     if (!isTargetCaller()) return
-                    val ni = param.thisObject
+                    val ni = param.thisObject as NetworkInfo
                     try {
                         val type = XposedHelpers.getIntField(ni, "mNetworkType")
                         if (type != TYPE_VPN) return
 
-                        savedType.set(type)
-                        XposedHelpers.setIntField(ni, "mNetworkType", TYPE_WIFI)
-                    } catch (t: Throwable) {
-                        XposedBridge.log("VpnHide: NI.writeToParcel before error: ${t.message}")
-                    }
-                }
+                        val ctor =
+                            NetworkInfo::class.java.getDeclaredConstructor(
+                                Integer.TYPE,
+                                Integer.TYPE,
+                                String::class.java,
+                                String::class.java,
+                            )
+                        ctor.isAccessible = true
+                        val copy = ctor.newInstance(TYPE_WIFI, 0, "WIFI", "") as NetworkInfo
+                        XposedHelpers.setIntField(copy, "mState", XposedHelpers.getIntField(ni, "mState"))
+                        XposedHelpers.setIntField(copy, "mDetailedState", XposedHelpers.getIntField(ni, "mDetailedState"))
+                        XposedHelpers.setBooleanField(copy, "mIsAvailable", XposedHelpers.getBooleanField(ni, "mIsAvailable"))
 
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val origType = savedType.get() ?: return
-                    savedType.remove()
-                    try {
-                        XposedHelpers.setIntField(param.thisObject, "mNetworkType", origType)
-                    } catch (_: Throwable) {
+                        val parcel = param.args[0] as android.os.Parcel
+                        val flags = param.args[1] as Int
+                        writingCopy.set(true)
+                        try {
+                            copy.writeToParcel(parcel, flags)
+                        } finally {
+                            writingCopy.set(false)
+                        }
+                        param.result = null
+                    } catch (t: Throwable) {
+                        XposedBridge.log("VpnHide: NI.writeToParcel error: ${t.message}")
                     }
                 }
             },
@@ -314,65 +299,47 @@ class HookEntry : IXposedHookLoadPackage {
 
     /**
      * Hook LinkProperties.writeToParcel — clear VPN interface name and
-     * filter routes with VPN interfaces for target callers. Instead of
-     * skipping writeToParcel (which would corrupt the Parcel stream),
-     * temporarily mutate and let serialization proceed normally.
+     * routes for target callers. Creates a copy to avoid mutating the
+     * original object shared by ConnectivityService threads.
      */
-    @Suppress("UNCHECKED_CAST")
     private fun hookLPWriteToParcel() {
+        val writingCopy = ThreadLocal<Boolean>()
         XposedHelpers.findAndHookMethod(
             LinkProperties::class.java,
             "writeToParcel",
             android.os.Parcel::class.java,
             Integer.TYPE,
             object : XC_MethodHook() {
-                private val savedIfname = ThreadLocal<String>()
-                private val savedRoutes = ThreadLocal<List<RouteInfo>>()
-
                 override fun beforeHookedMethod(param: MethodHookParam) {
+                    if (writingCopy.get() == true) return
                     if (!isTargetCaller()) return
-                    val lp = param.thisObject
+                    val lp = param.thisObject as LinkProperties
                     try {
                         val ifname = XposedHelpers.getObjectField(lp, "mIfaceName") as? String ?: return
                         if (!isVpnInterfaceName(ifname)) return
 
-                        savedIfname.set(ifname)
-                        XposedHelpers.setObjectField(lp, "mIfaceName", null)
-
-                        // Clear ALL routes — this LP belongs to a VPN network,
-                        // so all its routes reference the VPN interface. If we
-                        // leave any, createFromParcel throws
-                        // "Route added with non-matching interface: tun0 vs. null"
-                        // because addRoute validates route.interface == mIfaceName.
+                        val ctor = LinkProperties::class.java.getDeclaredConstructor(LinkProperties::class.java)
+                        ctor.isAccessible = true
+                        val copy = ctor.newInstance(lp) as LinkProperties
+                        XposedHelpers.setObjectField(copy, "mIfaceName", null)
                         try {
-                            val routes = XposedHelpers.getObjectField(lp, "mRoutes") as? MutableList<*>
-                            if (routes != null && routes.isNotEmpty()) {
-                                savedRoutes.set(ArrayList(routes) as List<RouteInfo>)
-                                routes.clear()
-                            }
+                            @Suppress("UNCHECKED_CAST")
+                            val routes = XposedHelpers.getObjectField(copy, "mRoutes") as? MutableList<*>
+                            routes?.clear()
                         } catch (_: Throwable) {
-                            // mRoutes may not exist on all Android versions
                         }
-                    } catch (t: Throwable) {
-                        XposedBridge.log("VpnHide: LP.writeToParcel before error: ${t.message}")
-                    }
-                }
 
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val origIfname = savedIfname.get() ?: return
-                    savedIfname.remove()
-                    val origRoutes = savedRoutes.get()
-                    savedRoutes.remove()
-                    try {
-                        XposedHelpers.setObjectField(param.thisObject, "mIfaceName", origIfname)
-                        if (origRoutes != null) {
-                            val routes = XposedHelpers.getObjectField(param.thisObject, "mRoutes") as? MutableList<RouteInfo>
-                            if (routes != null) {
-                                routes.clear()
-                                routes.addAll(origRoutes)
-                            }
+                        val parcel = param.args[0] as android.os.Parcel
+                        val flags = param.args[1] as Int
+                        writingCopy.set(true)
+                        try {
+                            copy.writeToParcel(parcel, flags)
+                        } finally {
+                            writingCopy.set(false)
                         }
-                    } catch (_: Throwable) {
+                        param.result = null
+                    } catch (t: Throwable) {
+                        XposedBridge.log("VpnHide: LP.writeToParcel error: ${t.message}")
                     }
                 }
             },
