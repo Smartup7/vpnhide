@@ -15,8 +15,8 @@ android {
         applicationId = "dev.okhsunrog.vpnhide"
         minSdk = 29
         targetSdk = 35
-        versionCode = 401
-        versionName = "0.4.1"
+        versionCode = 402
+        versionName = "0.4.2"
     }
 
     signingConfigs {
