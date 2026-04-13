@@ -48,9 +48,12 @@
     <string name="dashboard_issue_reboot">Хуки LSPosed требуют перезагрузки для активации.</string>
     <string name="dashboard_issue_no_targets">Целевые приложения не настроены. Перейдите во вкладку «Приложения».</string>
     <string name="dashboard_issue_version_mismatch">Несоответствие версий модуля: запущена %1$s, установлена %2$s. Перезагрузитесь для обновления.</string>
-    <string name="dashboard_issue_update_module">Версия %1$s %2$s старее версии приложения %3$s. Обновите модуль %1$s.</string>
-    <string name="dashboard_issue_update_app">Версия %1$s %2$s новее версии приложения %3$s. Обновите приложение VPN Hide.</string>
-    <string name="dashboard_issue_module_version_mismatch">Несоответствие версий %1$s: модуль %2$s, приложение %3$s. Держите их на одной версии.</string>
+    <string name="dashboard_issue_update_kmod">Версия модуля ядра %1$s старее версии приложения %2$s. Обновите модуль ядра.</string>
+    <string name="dashboard_issue_update_zygisk">Версия модуля Zygisk %1$s старее версии приложения %2$s. Обновите модуль Zygisk.</string>
+    <string name="dashboard_issue_update_app_for_kmod">Версия модуля ядра %1$s новее версии приложения %2$s. Обновите приложение VPN Hide.</string>
+    <string name="dashboard_issue_update_app_for_zygisk">Версия модуля Zygisk %1$s новее версии приложения %2$s. Обновите приложение VPN Hide.</string>
+    <string name="dashboard_issue_kmod_version_mismatch">Несоответствие версий модуля ядра: модуль %1$s, приложение %2$s. Держите их на одной версии.</string>
+    <string name="dashboard_issue_zygisk_version_mismatch">Несоответствие версий модуля Zygisk: модуль %1$s, приложение %2$s. Держите их на одной версии.</string>
     <string name="dashboard_running_version">Версия запущенного модуля: %s</string>
 
     <!-- Diagnostics -->

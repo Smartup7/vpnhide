@@ -60,6 +60,8 @@ sealed interface JavaResult {
     data object HooksInactive : JavaResult
 }
 
+private enum class NativeModuleKind { Kmod, Zygisk }
+
 private data class DashboardState(
     val kmod: ModuleState,
     val zygisk: ModuleState,
@@ -464,25 +466,31 @@ private fun loadDashboardState(
         return 0
     }
 
-    fun buildModuleVersionIssue(moduleName: String, moduleVersion: String, appVersion: String): String {
+    fun buildModuleVersionIssue(kind: NativeModuleKind, moduleVersion: String, appVersion: String): String {
         val normalizedModuleVersion = normalizeVersion(moduleVersion)
         val normalizedAppVersion = normalizeVersion(appVersion)
         return when (compareSemver(normalizedModuleVersion, normalizedAppVersion)) {
             null, 0 -> res.getString(
-                R.string.dashboard_issue_module_version_mismatch,
-                moduleName,
+                when (kind) {
+                    NativeModuleKind.Kmod -> R.string.dashboard_issue_kmod_version_mismatch
+                    NativeModuleKind.Zygisk -> R.string.dashboard_issue_zygisk_version_mismatch
+                },
                 moduleVersion,
                 appVersion,
             )
             in Int.MIN_VALUE..-1 -> res.getString(
-                R.string.dashboard_issue_update_module,
-                moduleName,
+                when (kind) {
+                    NativeModuleKind.Kmod -> R.string.dashboard_issue_update_kmod
+                    NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_zygisk
+                },
                 moduleVersion,
                 appVersion,
             )
             else -> res.getString(
-                R.string.dashboard_issue_update_app,
-                moduleName,
+                when (kind) {
+                    NativeModuleKind.Kmod -> R.string.dashboard_issue_update_app_for_kmod
+                    NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_app_for_zygisk
+                },
                 moduleVersion,
                 appVersion,
             )
@@ -547,10 +555,10 @@ private fun loadDashboardState(
     }
     val appVersion = BuildConfig.VERSION_NAME
     if (kmod is ModuleState.Installed && kmod.version != null && normalizeVersion(kmod.version) != normalizeVersion(appVersion)) {
-        issues += buildModuleVersionIssue(res.getString(R.string.dashboard_kmod), kmod.version, appVersion)
+        issues += buildModuleVersionIssue(NativeModuleKind.Kmod, kmod.version, appVersion)
     }
     if (zygisk is ModuleState.Installed && zygisk.version != null && normalizeVersion(zygisk.version) != normalizeVersion(appVersion)) {
-        issues += buildModuleVersionIssue(res.getString(R.string.dashboard_zygisk), zygisk.version, appVersion)
+        issues += buildModuleVersionIssue(NativeModuleKind.Zygisk, zygisk.version, appVersion)
     }
     if (lsposed is LsposedState.Active) {
         if (lsposedTargetCount == 0) {
