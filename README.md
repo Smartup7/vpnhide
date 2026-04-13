@@ -27,59 +27,86 @@ The target app's process is completely untouched (with kmod + lsposed) — no Xp
 
 ## Which modules do I need?
 
-You always need **lsposed** (Java API layer) plus one native module:
+You always need the **VPN Hide app** (`vpnhide-lsposed.apk`) plus one native module. The app's **Dashboard** will detect your device and recommend the right one:
 
-- **`kmod` + `lsposed`** (recommended) — fully out-of-process, invisible to anti-tamper. Requires a supported GKI kernel (see below).
-- **`zygisk` + `lsposed`** — use this if your device's GKI generation isn't covered by the kmod builds, or if you can't install kernel modules.
+- **`kmod`** (recommended) — fully out-of-process, invisible to anti-tamper. Requires a supported GKI kernel.
+- **`zygisk`** — use this if your kernel isn't supported by kmod.
+
+See [Install](#install) for step-by-step instructions.
 
 ## Install
 
 Download the latest release from [Releases](https://github.com/okhsunrog/vpnhide/releases).
 
-### kmod + lsposed (recommended)
+### Step 1 — VPN Hide app + LSPosed
 
-1. Install `vpnhide-kmod-<your-gki>.zip` via KernelSU-Next manager → Modules → Install from storage
-2. Install `vpnhide-lsposed.apk` as a regular app
-3. In LSPosed manager, enable the vpnhide module and add **"System Framework"** to its scope
-4. Reboot (required — LSPosed hooks are injected into `system_server` at boot, so the module must be active before `system_server` starts)
-5. Open the VPN Hide app, grant it root access (Magisk will prompt automatically; on KernelSU-Next, grant permission manually in the manager), and select target apps
+1. Install `vpnhide-lsposed.apk` as a regular app
+2. In LSPosed manager, enable the VPN Hide module and add **"System Framework"** to its scope
+3. Reboot (required — LSPosed hooks are injected into `system_server` at boot, so the module must be active before `system_server` starts)
+4. Open the VPN Hide app and grant it root access (Magisk will prompt automatically; on KernelSU-Next, grant permission manually in the manager)
 
-**How to find your GKI generation:**
+### Step 2 — Native module
+
+Open the VPN Hide app. The **Dashboard** tab will detect your device and kernel, and tell you exactly which native module to install:
+
+- If your kernel is supported, it will recommend a specific kmod file (e.g. `vpnhide-kmod-android14-6.1.zip`)
+- If not, it will recommend the zygisk module (`vpnhide-zygisk.zip`)
+
+Install the recommended module:
+- **kmod:** via KernelSU-Next manager → Modules → Install from storage
+- **zygisk:** via KernelSU-Next or Magisk manager → Modules
+
+Reboot after installing the native module.
+
+### Step 3 — Select target apps
+
+Open the VPN Hide app → **Apps** tab. Use the **L** / **K** / **Z** toggles to control which protection layers apply to each app (LSPosed, Kernel module, Zygisk), or tap the row to toggle all layers at once. Tap Save.
+
+After changing targets, force-stop and restart the affected apps — hooks take effect on the next app launch.
+
+> **Note:** some apps detect Zygisk hooks. For those apps, keep **Z** disabled and rely on kmod + LSPosed.
+
+<details>
+<summary><b>Shell configuration (advanced)</b></summary>
+
+Edit `/data/adb/vpnhide_kmod/targets.txt`, `/data/adb/vpnhide_zygisk/targets.txt`, or `/data/adb/vpnhide_lsposed/targets.txt` directly (one package name per line). Force-stop and restart affected apps for changes to take effect.
+
+</details>
+
+<details>
+<summary><b>Manual GKI lookup (if you want to pick the kmod file yourself)</b></summary>
 
 1. On your phone, go to **Settings → About phone** and find the **Kernel version** line. It looks something like `6.1.75-android14-11-g...`
 2. You need two parts from this string: the kernel version (`6.1`) and the android generation (`android14`). Together they form your GKI generation: `android14-6.1`
 3. Download the matching file from the release: `vpnhide-kmod-android14-6.1.zip`
 
-Alternatively, if you have ADB set up, run `adb shell uname -r` to see the same kernel version string.
+Alternatively, run `adb shell uname -r` to see the kernel version string.
 
-> **Important:** the `android14` in the kernel string is NOT your Android version — it's the kernel generation. For example, Pixels from 6 to 9a all use the `android14-6.1` kernel regardless of whether they run Android 14 or 15. Pixel 10 series uses `android16-6.12`.
+> **Important:** `android14` in the kernel string is NOT your Android version — it's the kernel generation. For example, Pixels from 6 to 9a all use the `android14-6.1` kernel regardless of whether they run Android 14 or 15.
 
-### zygisk + lsposed
-
-1. Install `vpnhide-zygisk.zip` via KernelSU-Next or Magisk manager → Modules
-2. Install `vpnhide-lsposed.apk` as a regular app
-3. In LSPosed manager, enable the vpnhide module and add **"System Framework"** to its scope
-4. Reboot (required — LSPosed hooks are injected into `system_server` at boot)
-5. Open the VPN Hide app, grant it root access (Magisk will prompt automatically; on KernelSU-Next, grant permission manually in the manager), and select target apps
-
-## Configuration
-
-**VPN Hide app (recommended):** open the VPN Hide app (installed as `vpnhide-lsposed.apk`) and grant it root access (Magisk prompts automatically; on KernelSU-Next, grant permission in the manager). It shows all installed apps with icons, names, and search. Check the apps you want to hide VPN from, tap Save. Works with both kmod and zygisk — writes to all target locations automatically via `su`.
-
-**Shell:** edit `/data/adb/vpnhide_kmod/targets.txt` or `/data/adb/vpnhide_zygisk/targets.txt` directly (one package name per line). Reboot for changes to take effect.
-
-After changing targets, force-stop and restart the affected apps — hooks take effect on the next app launch.
+</details>
 
 ## Verify
 
-Open the VPN Hide app, switch to the Diagnostics tab, and run all checks with VPN active. The app auto-adds itself to the target list. All 26 checks should show PASS.
+The app has a built-in diagnostics system that catches most setup problems automatically.
+
+**Dashboard** (runs on every app launch):
+- Module status for all three layers (installed, active, version, target count)
+- LSPosed configuration validation — reads the LSPosed database to verify that VPN Hide is enabled, System Framework is in scope, and no extra apps are scoped (a common misconfiguration)
+- Version mismatch detection — compares installed module versions with the running app version and tells you exactly what to update
+- Native module recommendation — detects your kernel and maps it to the right kmod artifact, or recommends zygisk if unsupported
+- Live protection check (when VPN is active) — runs 16 native checks and 5 Java API checks to verify that VPN is actually hidden
+
+Any issues found are shown as actionable cards with specific instructions.
+
+**Diagnostics** tab — detailed per-check breakdown with individual PASS/FAIL results for all 26 detection vectors. Useful for troubleshooting when the Dashboard shows partial protection.
 
 ## Components
 
 | Directory | What | How |
 |---|---|---|
 | **[kmod/](kmod/)** | Kernel module (C) | `kretprobe` hooks in kernel space. Zero footprint in the target app's process. ([details](kmod/README.md)) |
-| **[lsposed/](lsposed/)** | LSPosed module + app (Kotlin + Rust) | Hooks `writeToParcel` in `system_server` for per-UID Binder filtering. The APK serves as target picker, diagnostics (26 checks), and module management UI. ([details](lsposed/README.md)) |
+| **[lsposed/](lsposed/)** | LSPosed module + app (Kotlin + Rust) | Hooks `writeToParcel` in `system_server` for per-UID Binder filtering. The APK provides a dashboard (module status, version checks, LSPosed config validation, install recommendations), per-app layer toggles, and diagnostics. ([details](lsposed/README.md)) |
 | **[zygisk/](zygisk/)** | Zygisk module (Rust) | Inline-hooks `libc.so` in the target app's process. Alternative to kmod. ([details](zygisk/README.md)) |
 
 ## Detection coverage
