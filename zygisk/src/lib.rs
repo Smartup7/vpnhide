@@ -36,7 +36,7 @@ use jni::JNIEnv;
 use log::{debug, error, info};
 use zygisk_api::ZygiskModule;
 use zygisk_api::api::ZygiskApi;
-use zygisk_api::api::v5::{AppSpecializeArgs, V5, ZygiskOption};
+use zygisk_api::api::v2::{AppSpecializeArgs, V2, ZygiskOption};
 
 use crate::hooks::{
     hooked_getifaddrs, hooked_ioctl, hooked_openat, hooked_recvmsg, set_real_getifaddrs_ptr,
@@ -127,9 +127,9 @@ fn load_targets_from_dir_fd(dir_fd: std::os::fd::RawFd) -> Vec<String> {
 }
 
 impl ZygiskModule for VpnHide {
-    type Api = V5;
+    type Api = V2;
 
-    fn on_load(&self, api: ZygiskApi<'_, V5>, _env: JNIEnv<'_>) {
+    fn on_load(&self, api: ZygiskApi<'_, V2>, _env: JNIEnv<'_>) {
         init_logger();
         let dir_fd = api.get_module_dir();
         CACHED_TARGETS.get_or_init(|| load_targets_from_dir_fd(dir_fd));
@@ -141,7 +141,7 @@ impl ZygiskModule for VpnHide {
 
     fn pre_app_specialize<'a>(
         &self,
-        mut api: ZygiskApi<'a, V5>,
+        mut api: ZygiskApi<'a, V2>,
         env: JNIEnv<'a>,
         args: &'a mut AppSpecializeArgs<'_>,
     ) {
@@ -162,7 +162,7 @@ impl ZygiskModule for VpnHide {
 
     fn post_app_specialize<'a>(
         &self,
-        _api: ZygiskApi<'a, V5>,
+        _api: ZygiskApi<'a, V2>,
         _env: JNIEnv<'a>,
         _args: &'a AppSpecializeArgs<'_>,
     ) {
@@ -224,7 +224,7 @@ fn write_status_file() {
 
 /// Tell Zygisk to `dlclose` our .so once the current callback returns.
 /// Saves memory in every process where we don't actually hook anything.
-fn mark_cleanup(api: &mut ZygiskApi<'_, V5>) {
+fn mark_cleanup(api: &mut ZygiskApi<'_, V2>) {
     api.set_option(ZygiskOption::DlCloseModuleLibrary);
 }
 
