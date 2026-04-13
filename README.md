@@ -1,8 +1,12 @@
-# VPN Hide
+<p align="center">
+  <img src="branding/logo.png" width="200" alt="VPN Hide" />
+</p>
 
-**[Русская версия](README.ru.md)**
+<h1 align="center">VPN Hide</h1>
 
-Hide an active Android VPN connection from selected apps.
+<p align="center">Hide an active Android VPN connection from selected apps.</p>
+
+<p align="center"><strong><a href="README.ru.md">Русская версия</a></strong></p>
 
 ## Why vpnhide over alternatives?
 

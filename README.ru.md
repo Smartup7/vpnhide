@@ -1,6 +1,10 @@
-# VPN Hide
+<p align="center">
+  <img src="branding/logo.png" width="200" alt="VPN Hide" />
+</p>
 
-Скрывает активное VPN-соединение на Android от выбранных приложений.
+<h1 align="center">VPN Hide</h1>
+
+<p align="center">Скрывает активное VPN-соединение на Android от выбранных приложений.</p>
 
 ## Чем vpnhide лучше аналогов?
 
