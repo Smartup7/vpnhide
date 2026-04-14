@@ -363,9 +363,11 @@ internal fun loadDashboardState(
     fun detectLsposedFramework(): LsposedFramework {
         // Known module directory names for LSPosed / LSPosed-Next / Vector
         val knownIds = listOf("zygisk_vector", "zygisk_lsposed", "lsposed")
-        val checkScript = knownIds.flatMap { id ->
-            listOf("/data/adb/modules/$id", "/data/adb/modules_update/$id")
-        }.joinToString("; ") { dir ->
+        val checkScript =
+            knownIds
+                .flatMap { id ->
+                    listOf("/data/adb/modules/$id", "/data/adb/modules_update/$id")
+                }.joinToString("; ") { dir ->
             "if [ -f $dir/module.prop ]; then " +
                 "echo installed=1; " +
                 "echo disabled=\$([ -f $dir/disable ] && echo 1 || echo 0); " +
