@@ -34,6 +34,10 @@
     <string name="summary_running">Running&#8230;</string>
     <string name="summary_format">%1$d/%2$d passed</string>
     <string name="btn_run_all">Run All Checks</string>
+    <string name="btn_export_debug">Collect debug log</string>
+    <string name="btn_export_debug_running">Collecting debug info&#8230;</string>
+    <string name="btn_save_debug">Save</string>
+    <string name="btn_share_debug">Share</string>
     <string name="badge_pass">PASS</string>
     <string name="badge_fail">FAIL</string>
     <string name="badge_info">INFO</string>

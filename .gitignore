@@ -31,6 +31,7 @@ kmod/*.usyms
 kmod/vpnhide_kmod.ko
 kmod/module/vpnhide_kmod.ko
 kmod/.env
+kmod/*.lds
 
 # General
 *.swp

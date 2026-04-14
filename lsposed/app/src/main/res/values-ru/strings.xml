@@ -86,6 +86,10 @@
     <string name="changelog_section_notes">Заметки</string>
 
     <!-- Diagnostics -->
+    <string name="btn_export_debug">Собрать отладочный лог</string>
+    <string name="btn_export_debug_running">Собираю отладочную информацию&#8230;</string>
+    <string name="btn_save_debug">Сохранить</string>
+    <string name="btn_share_debug">Поделиться</string>
     <string name="summary_running">Выполняется&#8230;</string>
     <string name="summary_format">%1$d/%2$d пройдено</string>
     <string name="btn_run_all">Запустить все проверки</string>
