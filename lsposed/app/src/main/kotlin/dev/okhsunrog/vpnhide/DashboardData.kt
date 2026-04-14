@@ -635,6 +635,7 @@ private fun runNativeProtectionCheck(): NativeResult {
             "ioctl_conf" to { NativeChecks.checkIoctlSiocgifconf() },
             "getifaddrs" to { NativeChecks.checkGetifaddrs() },
             "netlink_getlink" to { NativeChecks.checkNetlinkGetlink() },
+            "netlink_getlink_recv" to { NativeChecks.checkNetlinkGetlinkRecv() },
             "netlink_getroute" to { NativeChecks.checkNetlinkGetroute() },
             "proc_route" to { NativeChecks.checkProcNetRoute() },
             "proc_ipv6_route" to { NativeChecks.checkProcNetIpv6Route() },

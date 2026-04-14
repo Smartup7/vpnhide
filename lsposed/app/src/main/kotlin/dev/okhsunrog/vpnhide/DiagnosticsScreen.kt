@@ -290,6 +290,7 @@ private fun runAllChecks(
             nativeCheck(res.getString(R.string.check_ioctl_conf)) { NativeChecks.checkIoctlSiocgifconf() },
             nativeCheck(res.getString(R.string.check_getifaddrs)) { NativeChecks.checkGetifaddrs() },
             nativeCheck(res.getString(R.string.check_netlink_getlink)) { NativeChecks.checkNetlinkGetlink() },
+            nativeCheck(res.getString(R.string.check_netlink_getlink_recv)) { NativeChecks.checkNetlinkGetlinkRecv() },
             nativeCheck(res.getString(R.string.check_netlink_getroute)) { NativeChecks.checkNetlinkGetroute() },
             nativeCheck(res.getString(R.string.check_proc_route)) { NativeChecks.checkProcNetRoute() },
             nativeCheck(res.getString(R.string.check_proc_ipv6_route)) { NativeChecks.checkProcNetIpv6Route() },

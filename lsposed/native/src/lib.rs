@@ -281,6 +281,19 @@ fn check_proc_file(path: &str) -> String {
     }
 }
 
+/// Wrapper around recvmsg for netlink sockets. Uses recvmsg (not recv/recvfrom)
+/// so that zygisk's recvmsg hook can filter the response.
+unsafe fn netlink_recv(fd: i32, buf: &mut [u8]) -> isize {
+    let mut iov = libc::iovec {
+        iov_base: buf.as_mut_ptr().cast(),
+        iov_len: buf.len(),
+    };
+    let mut msg: libc::msghdr = std::mem::zeroed();
+    msg.msg_iov = &mut iov;
+    msg.msg_iovlen = 1;
+    libc::recvmsg(fd, &mut msg, 0)
+}
+
 fn open_netlink() -> Result<i32, String> {
     unsafe {
         let fd = libc::socket(libc::AF_NETLINK, libc::SOCK_RAW, libc::NETLINK_ROUTE);
@@ -400,7 +413,7 @@ fn check_netlink_getlink() -> String {
             std::mem::size_of::<libc::nlmsghdr>() + std::mem::size_of::<Ifinfomsg>();
 
         loop {
-            let len = libc::recv(fd, buf.as_mut_ptr().cast(), buf.len(), 0);
+            let len = netlink_recv(fd, &mut buf);
             if len <= 0 {
                 break;
             }
@@ -434,6 +447,83 @@ fn check_netlink_getlink() -> String {
             &all,
             &vpn,
             &format!("{} interfaces via netlink:", all.len()),
+        )
+    }
+}
+
+/// Same as check_netlink_getlink but uses recv (→ recvfrom) instead of recvmsg.
+/// Temporary check to verify the recvfrom hook works.
+fn check_netlink_getlink_recv() -> String {
+    logi("=== CHECK: netlink RTM_GETLINK via recv ===");
+    let fd = match open_netlink() {
+        Ok(fd) => fd,
+        Err(msg) => return msg,
+    };
+
+    unsafe {
+        #[repr(C)]
+        struct Req {
+            nlh: libc::nlmsghdr,
+            ifm: Ifinfomsg,
+        }
+        let mut req: Req = std::mem::zeroed();
+        req.nlh.nlmsg_len = std::mem::size_of::<Req>() as u32;
+        req.nlh.nlmsg_type = libc::RTM_GETLINK;
+        req.nlh.nlmsg_flags = (libc::NLM_F_REQUEST | libc::NLM_F_DUMP) as u16;
+        req.nlh.nlmsg_seq = 1;
+
+        if libc::send(
+            fd,
+            std::ptr::from_ref(&req).cast(),
+            req.nlh.nlmsg_len as usize,
+            0,
+        ) < 0
+        {
+            let e = last_os_error();
+            libc::close(fd);
+            return format!("FAIL: send error: {e}");
+        }
+
+        let mut buf = [0u8; 32768];
+        let mut all = Vec::new();
+        let mut vpn = Vec::new();
+        let hdr_plus_ifinfo =
+            std::mem::size_of::<libc::nlmsghdr>() + std::mem::size_of::<Ifinfomsg>();
+
+        loop {
+            let len = libc::recv(fd, buf.as_mut_ptr().cast(), buf.len(), 0);
+            if len <= 0 {
+                break;
+            }
+            let cont = parse_netlink_msgs(
+                &buf,
+                len as usize,
+                libc::RTM_NEWLINK,
+                |b, offset, msg_len| {
+                    let data_start = offset + hdr_plus_ifinfo;
+                    let msg_end = offset + msg_len;
+                    for_each_rtattr(b, data_start, msg_end, |rta, rta_off| {
+                        if rta.rta_type == IFLA_IFNAME {
+                            let name =
+                                cstr_to_str(b.as_ptr().add(rta_off + 4) as *const libc::c_char);
+                            if is_vpn_iface(&name) {
+                                vpn.push(name.clone());
+                            }
+                            all.push(name);
+                        }
+                    });
+                },
+            );
+            if !cont {
+                break;
+            }
+        }
+        libc::close(fd);
+
+        format_iface_result(
+            &all,
+            &vpn,
+            &format!("{} interfaces via netlink (recv):", all.len()),
         )
     }
 }
@@ -475,7 +565,7 @@ fn check_netlink_getroute() -> String {
         let hdr_plus_rtmsg = std::mem::size_of::<libc::nlmsghdr>() + std::mem::size_of::<Rtmsg>();
 
         loop {
-            let len = libc::recv(fd, buf.as_mut_ptr().cast(), buf.len(), 0);
+            let len = netlink_recv(fd, &mut buf);
             if len <= 0 {
                 break;
             }
@@ -588,6 +678,10 @@ jni_fn!(
 jni_fn!(
     Java_dev_okhsunrog_vpnhide_NativeChecks_checkNetlinkGetlink,
     check_netlink_getlink()
+);
+jni_fn!(
+    Java_dev_okhsunrog_vpnhide_NativeChecks_checkNetlinkGetlinkRecv,
+    check_netlink_getlink_recv()
 );
 jni_fn!(
     Java_dev_okhsunrog_vpnhide_NativeChecks_checkNetlinkGetroute,

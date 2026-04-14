@@ -39,8 +39,9 @@ use zygisk_api::api::ZygiskApi;
 use zygisk_api::api::v2::{AppSpecializeArgs, V2, ZygiskOption};
 
 use crate::hooks::{
-    hooked_getifaddrs, hooked_ioctl, hooked_openat, hooked_recvmsg, set_real_getifaddrs_ptr,
-    set_real_ioctl_ptr, set_real_openat_ptr, set_real_recvmsg_ptr,
+    hooked_getifaddrs, hooked_ioctl, hooked_openat, hooked_recv, hooked_recvmsg,
+    set_real_getifaddrs_ptr, set_real_ioctl_ptr, set_real_openat_ptr, set_real_recv_ptr,
+    set_real_recvmsg_ptr,
 };
 
 const LOG_TAG: &str = "vpnhide-zygisk";
@@ -260,6 +261,10 @@ fn install_hooks() -> Result<(), String> {
     )?;
     hook_libc_sym(c"openat", hooked_openat as *mut _, set_real_openat_ptr)?;
     hook_libc_sym(c"recvmsg", hooked_recvmsg as *mut _, set_real_recvmsg_ptr)?;
+    // Hook recv directly. We cannot hook recvfrom because bionic's recv()
+    // does a bare `b recvfrom` — patching recvfrom's prologue breaks recv.
+    // recv itself is 12 bytes (3 instructions), safe for island-mode hooking.
+    hook_libc_sym(c"recv", hooked_recv as *mut _, set_real_recv_ptr)?;
 
     Ok(())
 }

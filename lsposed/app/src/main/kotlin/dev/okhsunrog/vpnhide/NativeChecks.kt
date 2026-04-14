@@ -19,6 +19,8 @@ object NativeChecks {
 
     external fun checkNetlinkGetlink(): String
 
+    external fun checkNetlinkGetlinkRecv(): String
+
     external fun checkNetlinkGetroute(): String
 
     external fun checkProcNetIpv6Route(): String

@@ -717,6 +717,70 @@ pub unsafe extern "C" fn hooked_recvmsg(fd: c_int, msg: *mut libc::msghdr, flags
     crate::filter::filter_netlink_dump(buf, &indices[..n]) as isize
 }
 
+// ============================================================================
+//  Hook: recv — filter netlink responses received via recv()
+// ============================================================================
+//
+// bionic's `recv()` tail-calls into `recvfrom()` via a bare `b` branch.
+// We cannot hook `recvfrom` because shadowhook would overwrite its prologue,
+// breaking `recv`'s branch target. Instead we hook `recv` directly — it's
+// 12 bytes (3 instructions), and shadowhook's island mode only needs 4.
+
+static REAL_RECV: AtomicPtr<c_void> = AtomicPtr::new(core::ptr::null_mut());
+
+type RecvFn = unsafe extern "C" fn(c_int, *mut c_void, usize, c_int) -> isize;
+
+#[inline(always)]
+fn real_recv() -> Option<RecvFn> {
+    let raw = REAL_RECV.load(Ordering::Relaxed);
+    if raw.is_null() {
+        None
+    } else {
+        Some(unsafe { core::mem::transmute::<*mut c_void, RecvFn>(raw) })
+    }
+}
+
+pub fn set_real_recv_ptr(p: *const ()) {
+    REAL_RECV.store(p as *mut c_void, Ordering::Relaxed);
+}
+
+/// Replacement for `libc::recv`.
+///
+/// Same filtering logic as `hooked_recvmsg`, but operates on the flat
+/// buffer that `recv` writes into directly.
+pub unsafe extern "C" fn hooked_recv(
+    fd: c_int,
+    buf: *mut c_void,
+    len: usize,
+    flags: c_int,
+) -> isize {
+    let Some(real) = real_recv() else {
+        set_errno(libc::EFAULT);
+        return -1;
+    };
+
+    let ret = unsafe { real(fd, buf, len, flags) };
+
+    if ret < 16 || buf.is_null() {
+        return ret;
+    }
+
+    let data = unsafe { core::slice::from_raw_parts_mut(buf as *mut u8, ret as usize) };
+
+    // Quick check: first message type must be RTM_NEWADDR or RTM_NEWLINK.
+    let nlmsg_type = u16::from_ne_bytes([data[4], data[5]]);
+    if nlmsg_type != crate::filter::RTM_NEWADDR && nlmsg_type != crate::filter::RTM_NEWLINK {
+        return ret;
+    }
+
+    let (indices, n) = collect_vpn_iface_indices();
+    if n == 0 {
+        return ret;
+    }
+
+    crate::filter::filter_netlink_dump(data, &indices[..n]) as isize
+}
+
 /// Collect interface indices of VPN interfaces. Uses real_getifaddrs
 /// (with IN_GETIFADDRS guard) and `if_nametoindex` (which calls
 /// ioctl(SIOCGIFINDEX) — passed through by our ioctl hook).
