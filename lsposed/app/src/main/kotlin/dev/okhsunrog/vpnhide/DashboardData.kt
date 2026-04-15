@@ -103,6 +103,7 @@ internal data class DashboardState(
     val kmod: ModuleState,
     val zygisk: ModuleState,
     val lsposed: LsposedState,
+    val ports: ModuleState,
     val nativeInstallRecommendation: NativeInstallRecommendation?,
     val protection: ProtectionCheck,
     val issues: List<String>,
@@ -422,6 +423,29 @@ internal fun loadDashboardState(
             ModuleState.NotInstalled
         }
     Log.i(TAG, "zygisk: $zygisk (heartbeatBootId=$zygiskBootId currentBootId=${currentBootId.trim()})")
+
+    // ports (iptables-based loopback blocker)
+    val (portsInstalled, portsVersion) = parseModuleProp(PORTS_MODULE_DIR)
+    val portsObserverCount =
+        if (portsInstalled) {
+            val (_, portsRaw) = suExec("cat $PORTS_OBSERVERS_FILE 2>/dev/null || true")
+            portsRaw.lines().count { line ->
+                val trimmed = line.trim()
+                trimmed.isNotEmpty() && !trimmed.startsWith("#") && trimmed.toIntOrNull() != null
+            }
+        } else {
+            0
+        }
+    val (_, portsChainExists) = suExec("iptables -L vpnhide_out -n 2>/dev/null >/dev/null && echo 1 || echo 0")
+    val portsActive = portsInstalled && portsChainExists.trim() == "1"
+    val ports: ModuleState =
+        if (portsInstalled) {
+            ModuleState.Installed(portsVersion, portsActive, portsObserverCount)
+        } else {
+            ModuleState.NotInstalled
+        }
+    Log.i(TAG, "ports: $ports")
+
     val nativeInstallRecommendation =
         if (kmod is ModuleState.NotInstalled && zygisk is ModuleState.NotInstalled) {
             buildNativeInstallRecommendation()
@@ -551,6 +575,9 @@ internal fun loadDashboardState(
     if (totalTargets == 0) {
         issues += res.getString(R.string.dashboard_issue_no_targets)
     }
+    if (ports is ModuleState.Installed && ports.targetCount == 0) {
+        issues += res.getString(R.string.dashboard_issue_ports_no_observers)
+    }
     if (lsposed is LsposedState.Active) {
         val runningVersion = lsposed.version
         if (runningVersion != null && runningVersion != appVersion) {
@@ -601,6 +628,7 @@ internal fun loadDashboardState(
         kmod = kmod,
         zygisk = zygisk,
         lsposed = lsposed,
+        ports = ports,
         nativeInstallRecommendation = nativeInstallRecommendation,
         protection = protection,
         issues = issues,

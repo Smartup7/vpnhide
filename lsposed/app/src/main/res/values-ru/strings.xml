@@ -56,6 +56,7 @@
     <string name="dashboard_kmod">Модуль ядра</string>
     <string name="dashboard_zygisk">VPN Hide Zygisk модуль</string>
     <string name="dashboard_lsposed_module">VPN Hide LSPosed-хук</string>
+    <string name="dashboard_ports">Модуль скрытия портов</string>
     <string name="dashboard_not_installed">Не установлен</string>
     <string name="dashboard_installed_inactive">Установлен, неактивен</string>
     <string name="dashboard_installed_restart_app">Установлен, перезапустите приложение</string>
@@ -86,6 +87,7 @@
     <string name="dashboard_issue_lsposed_no_system_scope">VPN Hide включён в LSPosed/Vector, но в его scope отсутствует System Framework. Добавьте System Framework в scope модуля VPN Hide в LSPosed/Vector.</string>
     <string name="dashboard_issue_lsposed_extra_scope">VPN Hide в LSPosed/Vector должен быть включён только для System Framework. Уберите из scope модуля VPN Hide эти приложения: %1$s. Для фильтрации используйте Защита → Туннели в VPN Hide.</string>
     <string name="dashboard_issue_no_targets">Целевые приложения не настроены. Перейдите в Защита → Туннели.</string>
+    <string name="dashboard_issue_ports_no_observers">Модуль скрытия портов установлен, но наблюдатели не настроены. Перейдите в Защита → Порты.</string>
     <string name="dashboard_issue_version_mismatch">Несоответствие версий LSPosed модуля: запущена %1$s, установлена %2$s. Перезагрузитесь для обновления.</string>
     <string name="dashboard_issue_update_kmod">Версия модуля ядра %1$s старее версии приложения %2$s. Откройте KernelSU/Magisk → Модули для обновления.</string>
     <string name="dashboard_issue_update_zygisk">Версия модуля Zygisk %1$s старее версии приложения %2$s. Откройте KernelSU/Magisk → Модули для обновления.</string>

@@ -90,6 +90,8 @@ fun DashboardScreen(
         ModuleCard(stringResource(R.string.dashboard_kmod), s.kmod)
         Spacer(Modifier.height(8.dp))
         ModuleCard(stringResource(R.string.dashboard_zygisk), s.zygisk, selfNeedsRestart)
+        Spacer(Modifier.height(8.dp))
+        ModuleCard(stringResource(R.string.dashboard_ports), s.ports)
         s.nativeInstallRecommendation?.let { recommendation ->
             Spacer(Modifier.height(8.dp))
             NativeInstallRecommendationCard(recommendation)

@@ -80,6 +80,7 @@
     <string name="dashboard_kmod">Kernel module</string>
     <string name="dashboard_zygisk">VPN Hide Zygisk module</string>
     <string name="dashboard_lsposed_module">VPN Hide LSPosed hook</string>
+    <string name="dashboard_ports">Ports hiding module</string>
     <string name="dashboard_not_installed">Not installed</string>
     <string name="dashboard_installed_inactive">Installed, inactive</string>
     <string name="dashboard_installed_restart_app">Installed, restart app to activate</string>
@@ -110,6 +111,7 @@
     <string name="dashboard_issue_lsposed_no_system_scope">VPN Hide is enabled in LSPosed/Vector, but System Framework is missing from its scope. Add System Framework to the VPN Hide scope in LSPosed/Vector.</string>
     <string name="dashboard_issue_lsposed_extra_scope">VPN Hide should stay scoped only to System Framework in LSPosed/Vector. Remove these apps from the VPN Hide scope: %1$s. Use Protection → Tun in VPN Hide for filtering instead.</string>
     <string name="dashboard_issue_no_targets">No target apps configured. Go to Protection → Tun to select apps.</string>
+    <string name="dashboard_issue_ports_no_observers">Ports hiding module is installed but no observers are configured. Go to Protection → Ports to pick apps.</string>
     <string name="dashboard_issue_version_mismatch">LSPosed module version mismatch: running %1$s, installed %2$s. Reboot to apply the update.</string>
     <string name="dashboard_issue_update_kmod">Kernel module version %1$s is older than app version %2$s. Open KernelSU/Magisk → Modules to update.</string>
     <string name="dashboard_issue_update_zygisk">Zygisk version %1$s is older than app version %2$s. Open KernelSU/Magisk → Modules to update.</string>
