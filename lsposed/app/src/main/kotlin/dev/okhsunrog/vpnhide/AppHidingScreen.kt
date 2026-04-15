@@ -1,0 +1,488 @@
+package dev.okhsunrog.vpnhide
+
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
+import io.github.oikvpqya.compose.fastscroller.VerticalScrollbar
+import io.github.oikvpqya.compose.fastscroller.indicator.IndicatorConstants
+import io.github.oikvpqya.compose.fastscroller.material3.defaultMaterialScrollbarStyle
+import io.github.oikvpqya.compose.fastscroller.rememberScrollbarAdapter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+internal data class HidingEntry(
+    val packageName: String,
+    val label: String,
+    val icon: Drawable?,
+    val isSystem: Boolean,
+    val hidden: Boolean = false,
+    val observer: Boolean = false,
+) {
+    val anySelected get() = hidden || observer
+}
+
+internal enum class HidingRole { HIDDEN, OBSERVER }
+
+@Composable
+fun AppHidingScreen(
+    searchQuery: String,
+    showSystem: Boolean,
+    showRussianOnly: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val pm = context.packageManager
+
+    var allApps by remember { mutableStateOf<List<HidingEntry>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var dirty by remember { mutableStateOf(false) }
+    var snackMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(snackMessage) {
+        snackMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            snackMessage = null
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            // Read hidden packages (by name) and observer UIDs → map back to names.
+            fun readLines(path: String): Set<String> {
+                val (_, raw) = suExec("cat $path 2>/dev/null || true")
+                return raw
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+                    .toSet()
+            }
+            val hiddenNames = readLines(SS_HIDDEN_PKGS_FILE)
+            val observerUids = readLines(SS_OBSERVER_UIDS_FILE).mapNotNull { it.toIntOrNull() }.toSet()
+
+            // Resolve observer UIDs → package names via `pm list packages -U`.
+            val (_, listing) = suExec("pm list packages -U 2>/dev/null")
+            val uidToPkg =
+                listing
+                    .lines()
+                    .mapNotNull { line ->
+                        val pkgMatch = Regex("^package:(\\S+) uid:(\\d+)").find(line) ?: return@mapNotNull null
+                        pkgMatch.groupValues[1] to pkgMatch.groupValues[2].toInt()
+                    }.associate { (pkg, uid) -> uid to pkg }
+            val observerNames = observerUids.mapNotNull { uidToPkg[it] }.toSet()
+
+            val selfPkg = context.packageName
+            val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            val entries =
+                installedApps
+                    .filter { it.packageName != selfPkg } // self is always hidden; managed invisibly
+                    .map { info ->
+                        val label =
+                            try {
+                                pm.getApplicationLabel(info).toString()
+                            } catch (_: Exception) {
+                                info.packageName
+                            }
+                        val icon =
+                            try {
+                                pm.getApplicationIcon(info)
+                            } catch (_: Exception) {
+                                null
+                            }
+                        val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                        val pkg = info.packageName
+                        HidingEntry(
+                            packageName = pkg,
+                            label = label,
+                            icon = icon,
+                            isSystem = isSystem,
+                            hidden = pkg in hiddenNames,
+                            observer = pkg in observerNames,
+                        )
+                    }.sortedBy { it.label.lowercase() }
+
+            allApps = entries
+            loading = false
+        }
+    }
+
+    val filteredApps =
+        remember(allApps, searchQuery, showSystem, showRussianOnly) {
+            val q = searchQuery.trim().lowercase()
+            allApps.filter { app ->
+                (showSystem || !app.isSystem || app.anySelected) &&
+                    (!showRussianOnly || isRussianApp(app.packageName, app.label)) &&
+                    (q.isEmpty() || app.label.lowercase().contains(q) || app.packageName.lowercase().contains(q))
+            }
+        }
+
+    val hiddenCount = remember(allApps) { allApps.count { it.hidden } }
+    val observerCount = remember(allApps) { allApps.count { it.observer } }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        if (loading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        } else {
+            val listState = rememberLazyListState()
+            Box(modifier = Modifier.weight(1f)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(filteredApps, key = { it.packageName }) { app ->
+                        HidingAppRow(
+                            app = app,
+                            onToggle = { role ->
+                                allApps =
+                                    allApps.map {
+                                        if (it.packageName != app.packageName) {
+                                            it
+                                        } else {
+                                            when (role) {
+                                                HidingRole.HIDDEN -> it.copy(hidden = !it.hidden)
+                                                HidingRole.OBSERVER -> it.copy(observer = !it.observer)
+                                            }
+                                        }
+                                    }
+                                dirty = true
+                            },
+                        )
+                    }
+                }
+                val interactionSource = remember { MutableInteractionSource() }
+                val isDragging by interactionSource.collectIsDraggedAsState()
+                val indicatorAlpha by animateFloatAsState(
+                    if (isDragging) 1f else 0f,
+                    label = "indicatorAlpha",
+                )
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(scrollState = listState),
+                    interactionSource = interactionSource,
+                    style = defaultMaterialScrollbarStyle(),
+                    enablePressToScroll = false,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .fillMaxHeight(),
+                    indicator = { position, isVisible ->
+                        val firstChar =
+                            filteredApps
+                                .getOrNull(listState.firstVisibleItemIndex)
+                                ?.label
+                                ?.firstOrNull()
+                                ?.uppercase() ?: ""
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(end = IndicatorConstants.Default.PADDING)
+                                    .graphicsLayer {
+                                        val y = -(IndicatorConstants.Default.MIN_HEIGHT / 2).toPx()
+                                        translationY = (y + position).coerceAtLeast(0f)
+                                        alpha = indicatorAlpha
+                                    },
+                        ) {
+                            val indicatorColor =
+                                if (isVisible) MaterialTheme.colorScheme.primary else Color.Transparent
+                            val textColor =
+                                if (isVisible) MaterialTheme.colorScheme.onPrimary else Color.Transparent
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .defaultMinSize(
+                                            minHeight = IndicatorConstants.Default.MIN_HEIGHT,
+                                            minWidth = IndicatorConstants.Default.MIN_WIDTH,
+                                        ).graphicsLayer {
+                                            clip = true
+                                            shape = IndicatorConstants.Default.SHAPE
+                                        }.drawBehind { drawRect(indicatorColor) },
+                            )
+                            Text(
+                                text = firstChar,
+                                color = textColor,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .wrapContentHeight()
+                                        .padding(end = IndicatorConstants.Default.PADDING)
+                                        .width(IndicatorConstants.Default.MIN_HEIGHT),
+                            )
+                        }
+                    },
+                )
+            }
+            Surface(tonalElevation = 3.dp) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "H: $hiddenCount · O: $observerCount",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = {
+                            saving = true
+                            dirty = false
+                        },
+                        enabled = dirty && !saving,
+                    ) {
+                        Text(stringResource(R.string.btn_save))
+                    }
+                }
+            }
+        }
+
+        SnackbarHost(snackbarHostState)
+    }
+
+    if (saving) {
+        LaunchedEffect(Unit) {
+            // Always include self in the hidden list — self is managed invisibly, never shown in UI.
+            val selfPkg = context.packageName
+            val hiddenPkgs =
+                (allApps.filter { it.hidden }.map { it.packageName } + selfPkg).distinct().sorted()
+            val observerPkgs = allApps.filter { it.observer }.map { it.packageName }.sorted()
+            val header = context.getString(R.string.save_header_comment)
+
+            try {
+                val (exitCode, _) =
+                    suExecAsync(buildHidingSaveCommand(header, hiddenPkgs, observerPkgs))
+                if (exitCode == 0) {
+                    snackMessage =
+                        context.getString(R.string.hiding_save_success, hiddenPkgs.size, observerPkgs.size)
+                } else if (exitCode == -1) {
+                    snackMessage = context.getString(R.string.save_failed_root)
+                    dirty = true
+                } else {
+                    snackMessage = context.getString(R.string.save_failed_exit, exitCode)
+                    dirty = true
+                }
+            } catch (e: Exception) {
+                snackMessage = context.getString(R.string.save_failed_error, e.message ?: "")
+                dirty = true
+            }
+            saving = false
+        }
+    }
+}
+
+private fun buildHidingSaveCommand(
+    header: String,
+    hiddenPkgs: List<String>,
+    observerPkgs: List<String>,
+): String {
+    fun encode(body: String): String = android.util.Base64.encodeToString(body.toByteArray(), android.util.Base64.NO_WRAP)
+
+    val parts = mutableListOf<String>()
+
+    // Hidden list: package names, one per line.
+    val hiddenBody = "$header\n" + hiddenPkgs.joinToString("\n") + if (hiddenPkgs.isNotEmpty()) "\n" else ""
+    val hiddenB64 = encode(hiddenBody)
+    parts +=
+        "echo '$hiddenB64' | base64 -d > $SS_HIDDEN_PKGS_FILE && chmod 644 $SS_HIDDEN_PKGS_FILE" +
+        " && chcon u:object_r:system_data_file:s0 $SS_HIDDEN_PKGS_FILE 2>/dev/null; true"
+
+    // Observer list: resolved UIDs.
+    if (observerPkgs.isNotEmpty()) {
+        parts += buildHidingUidResolver(observerPkgs, SS_OBSERVER_UIDS_FILE)
+        parts += "chmod 644 $SS_OBSERVER_UIDS_FILE 2>/dev/null"
+        parts += "chcon u:object_r:system_data_file:s0 $SS_OBSERVER_UIDS_FILE 2>/dev/null; true"
+    } else {
+        parts +=
+            "echo > $SS_OBSERVER_UIDS_FILE 2>/dev/null;" +
+            " chmod 644 $SS_OBSERVER_UIDS_FILE 2>/dev/null;" +
+            " chcon u:object_r:system_data_file:s0 $SS_OBSERVER_UIDS_FILE 2>/dev/null; true"
+    }
+
+    return parts.joinToString(" ; ")
+}
+
+private fun buildHidingUidResolver(
+    packages: List<String>,
+    outputFile: String,
+): String =
+    buildString {
+        append("ALL_PKGS=\"\$(pm list packages -U 2>/dev/null)\"")
+        append("; UIDS=\"\"")
+        for (pkg in packages) {
+            append("; U=\$(echo \"\$ALL_PKGS\" | grep '^package:$pkg ' | sed 's/.*uid://')")
+            append("; if [ -n \"\$U\" ]; then if [ -z \"\$UIDS\" ]; then UIDS=\"\$U\"; else UIDS=\"\$UIDS")
+            append("\n")
+            append("\$U\"; fi; fi")
+        }
+        append("; if [ -n \"\$UIDS\" ]; then echo \"\$UIDS\" > $outputFile 2>/dev/null")
+        append("; else echo > $outputFile 2>/dev/null; fi")
+    }
+
+@Composable
+fun AppHidingHelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.hiding_help_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.hiding_hint_roles),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.hiding_hint_system),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = stringResource(R.string.hiding_hint_reboot),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("OK") }
+        },
+    )
+}
+
+@Composable
+private fun HidingAppRow(
+    app: HidingEntry,
+    onToggle: (HidingRole) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        app.icon?.let { drawable ->
+            Image(
+                bitmap = drawable.toBitmap(48, 48).asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = app.label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = app.packageName,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                RoleChip(
+                    label = stringResource(R.string.hiding_chip_hidden),
+                    enabled = app.hidden,
+                    onClick = { onToggle(HidingRole.HIDDEN) },
+                )
+                RoleChip(
+                    label = stringResource(R.string.hiding_chip_observer),
+                    enabled = app.observer,
+                    onClick = { onToggle(HidingRole.OBSERVER) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoleChip(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val containerColor = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = containerColor,
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = contentColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+    }
+}

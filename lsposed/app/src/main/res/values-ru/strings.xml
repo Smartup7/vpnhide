@@ -4,8 +4,14 @@
 
     <!-- Navigation -->
     <string name="tab_dashboard">Обзор</string>
-    <string name="tab_apps">Приложения</string>
+    <string name="tab_protection">Защита</string>
     <string name="tab_diagnostics">Диагностика</string>
+
+    <!-- Protection modes (segmented button) -->
+    <string name="mode_vpn_targets">Туннели</string>
+    <string name="mode_app_hiding">Приложения</string>
+    <string name="mode_port_hiding">Порты</string>
+    <string name="port_hiding_coming_soon">Скоро</string>
 
     <!-- App picker -->
     <string name="selected_count">%d выбрано</string>
@@ -17,6 +23,13 @@
     <string name="apps_help_title">Как это работает</string>
     <string name="apps_hint_toggles">Нажимайте L, K, Z для переключения отдельных уровней защиты (LSPosed, модуль ядра, Zygisk). Нажмите на строку, чтобы переключить все уровни сразу.</string>
     <string name="apps_hint_zygisk">Некоторые приложения обнаруживают хуки Zygisk. Для таких приложений оставьте Z выключенным и используйте другие уровни защиты.</string>
+
+    <!-- App hiding -->
+    <string name="hiding_help_title">Как работает скрытие приложений</string>
+    <string name="hiding_hint_roles">Отметьте приложения как H (Hidden — скрытые) — приложения с меткой O (Observer — наблюдатели) не смогут их видеть. Наблюдатель не получит скрытое приложение ни в списке установленных, ни через intent-запросы, ни через resolve.</string>
+    <string name="hiding_hint_system">Системные вызовы (установщик, лаунчер, системные сервисы) всегда исключены — иначе сломается базовая функциональность Android.</string>
+    <string name="hiding_hint_reboot">Изменения применяются мгновенно, но приложения-наблюдатели могут кэшировать список — сделайте force-stop и перезапустите их, чтобы увидеть результат.</string>
+    <string name="hiding_save_success">Сохранено · %1$d скрыто, %2$d наблюдателей</string>
 
     <!-- Root status -->
     <string name="root_error_title">Требуется root-доступ</string>
@@ -62,8 +75,8 @@
     <string name="dashboard_issue_lsposed_config_unreadable">Не удалось прочитать конфигурацию LSPosed/Vector. Откройте LSPosed/Vector, проверьте что VPN Hide там включён, затем снова откройте VPN Hide.</string>
     <string name="dashboard_issue_lsposed_not_enabled">VPN Hide найден в LSPosed/Vector, но модуль выключен. Включите VPN Hide в LSPosed/Vector и оставьте в scope System Framework.</string>
     <string name="dashboard_issue_lsposed_no_system_scope">VPN Hide включён в LSPosed/Vector, но в его scope отсутствует System Framework. Добавьте System Framework в scope модуля VPN Hide в LSPosed/Vector.</string>
-    <string name="dashboard_issue_lsposed_extra_scope">VPN Hide в LSPosed/Vector должен быть включён только для System Framework. Уберите из scope модуля VPN Hide эти приложения: %1$s. Для фильтрации используйте вкладку «Приложения» в VPN Hide.</string>
-    <string name="dashboard_issue_no_targets">Целевые приложения не настроены. Перейдите во вкладку «Приложения».</string>
+    <string name="dashboard_issue_lsposed_extra_scope">VPN Hide в LSPosed/Vector должен быть включён только для System Framework. Уберите из scope модуля VPN Hide эти приложения: %1$s. Для фильтрации используйте Защита → Туннели в VPN Hide.</string>
+    <string name="dashboard_issue_no_targets">Целевые приложения не настроены. Перейдите в Защита → Туннели.</string>
     <string name="dashboard_issue_version_mismatch">Несоответствие версий LSPosed модуля: запущена %1$s, установлена %2$s. Перезагрузитесь для обновления.</string>
     <string name="dashboard_issue_update_kmod">Версия модуля ядра %1$s старее версии приложения %2$s. Откройте KernelSU/Magisk → Модули для обновления.</string>
     <string name="dashboard_issue_update_zygisk">Версия модуля Zygisk %1$s старее версии приложения %2$s. Откройте KernelSU/Magisk → Модули для обновления.</string>

@@ -78,7 +78,7 @@ fun VpnHideApp() {
     }
 }
 
-private enum class Tab { Dashboard, Apps, Diagnostics }
+private enum class Tab { Dashboard, Protection, Diagnostics }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,19 +102,15 @@ private fun MainScreen() {
     }
 
     LaunchedEffect(currentTab) {
-        if (currentTab != Tab.Apps) {
+        if (currentTab != Tab.Protection) {
             searchActive = false
             searchQuery = ""
         }
     }
 
-    if (showHelp) {
-        AppsHelpDialog(onDismiss = { showHelp = false })
-    }
-
     Scaffold(
         topBar = {
-            if (searchActive && currentTab == Tab.Apps) {
+            if (searchActive && currentTab == Tab.Protection) {
                 SearchBar(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
@@ -148,7 +144,7 @@ private fun MainScreen() {
                             titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         ),
                     actions = {
-                        if (currentTab == Tab.Apps) {
+                        if (currentTab == Tab.Protection) {
                             IconButton(onClick = { searchActive = true }) {
                                 Icon(
                                     Icons.Default.Search,
@@ -217,10 +213,10 @@ private fun MainScreen() {
                     label = { Text(stringResource(R.string.tab_dashboard)) },
                 )
                 NavigationBarItem(
-                    selected = currentTab == Tab.Apps,
-                    onClick = { currentTab = Tab.Apps },
+                    selected = currentTab == Tab.Protection,
+                    onClick = { currentTab = Tab.Protection },
                     icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                    label = { Text(stringResource(R.string.tab_apps)) },
+                    label = { Text(stringResource(R.string.tab_protection)) },
                 )
                 NavigationBarItem(
                     selected = currentTab == Tab.Diagnostics,
@@ -248,11 +244,13 @@ private fun MainScreen() {
                     )
                 }
 
-                Tab.Apps -> {
-                    AppPickerScreen(
+                Tab.Protection -> {
+                    ProtectionScreen(
                         searchQuery = searchQuery,
                         showSystem = showSystem,
                         showRussianOnly = showRussianOnly,
+                        showHelp = showHelp,
+                        onDismissHelp = { showHelp = false },
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

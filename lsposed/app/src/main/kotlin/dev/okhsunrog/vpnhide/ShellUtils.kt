@@ -14,6 +14,8 @@ internal const val ZYGISK_MODULE_TARGETS = "/data/adb/modules/vpnhide_zygisk/tar
 internal const val LSPOSED_TARGETS = "/data/adb/vpnhide_lsposed/targets.txt"
 internal const val PROC_TARGETS = "/proc/vpnhide_targets"
 internal const val SS_UIDS_FILE = "/data/system/vpnhide_uids.txt"
+internal const val SS_HIDDEN_PKGS_FILE = "/data/system/vpnhide_hidden_pkgs.txt"
+internal const val SS_OBSERVER_UIDS_FILE = "/data/system/vpnhide_observer_uids.txt"
 internal const val KMOD_MODULE_DIR = "/data/adb/modules/vpnhide_kmod"
 internal const val ZYGISK_MODULE_DIR = "/data/adb/modules/vpnhide_zygisk"
 internal const val ZYGISK_STATUS_FILE_NAME = "vpnhide_zygisk_active"
@@ -121,6 +123,25 @@ internal fun ensureSelfInTargets(selfPkg: String): Boolean {
     suExec("[ -d $ZYGISK_MODULE_DIR ] && cp $ZYGISK_TARGETS $ZYGISK_MODULE_TARGETS 2>/dev/null; true")
     suExec("mkdir -p /data/adb/vpnhide_lsposed")
     addIfMissing(LSPOSED_TARGETS, null)
+
+    // Always hide self via package visibility hooks — prevents observer apps from seeing us.
+    // File lives in /data/system/ (system_data_file), readable by system_server.
+    val (_, hiddenRaw) = suExec("cat $SS_HIDDEN_PKGS_FILE 2>/dev/null || true")
+    val hiddenExisting = hiddenRaw.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+    if (selfPkg !in hiddenExisting) {
+        val body =
+            "# Managed by VPN Hide app\n" +
+                (hiddenExisting + selfPkg).sorted().joinToString("\n") + "\n"
+        val b64 = Base64.encodeToString(body.toByteArray(), Base64.NO_WRAP)
+        suExec(
+            "echo '$b64' | base64 -d > $SS_HIDDEN_PKGS_FILE" +
+                " && chmod 644 $SS_HIDDEN_PKGS_FILE" +
+                " && chcon u:object_r:system_data_file:s0 $SS_HIDDEN_PKGS_FILE 2>/dev/null; true",
+        )
+        Log.i(TAG, "ensureSelfInTargets: added $selfPkg to $SS_HIDDEN_PKGS_FILE")
+        // Don't flip `added`: PM hooks live in system_server and pick up the file change
+        // immediately via inotify — no app restart is needed, unlike native (zygisk) hooks.
+    }
 
     // Resolve UIDs so hooks pick us up immediately (kmod + lsposed support live reload)
     val uidCmd =
