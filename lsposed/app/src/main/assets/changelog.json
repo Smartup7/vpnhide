@@ -1,59 +1,82 @@
 {
-  "version": "0.6.0",
+  "version": "0.6.1",
   "sections": [
-    {
-      "type": "added",
-      "items": [
-        {
-          "en": "App hiding mode in Protection — hide selected apps from selected observer apps at the PackageManager level. Observer apps can no longer list, resolve, or query hidden apps.",
-          "ru": "Режим скрытия приложений в разделе «Защита» — скрывайте выбранные приложения от выбранных приложений-наблюдателей на уровне PackageManager. Наблюдатели больше не могут перечислять, находить или запрашивать скрытые приложения."
-        },
-        {
-          "en": "Ports hiding mode plus new vpnhide-ports.zip module — block selected apps from reaching 127.0.0.1 / ::1 ports to hide locally running VPN/proxy daemons (Clash, sing-box, V2Ray, Happ, etc.).",
-          "ru": "Режим скрытия портов и новый модуль vpnhide-ports.zip — блокируйте выбранным приложениям доступ к портам 127.0.0.1 / ::1, чтобы скрыть локально работающие VPN/прокси-демоны (Clash, sing-box, V2Ray, Happ и т. д.)."
-        },
-        {
-          "en": "Ports module integration in the dashboard — shows install state, active rules, observer count, and version mismatch/update warnings.",
-          "ru": "Интеграция модуля скрытия портов в панель — показывает статус установки, активность правил, число наблюдателей и предупреждения о несовпадении версий или доступных обновлениях."
-        }
-      ]
-    },
-    {
-      "type": "changed",
-      "items": [
-        {
-          "en": "The old Apps tab is now Protection, split into three modes: Tun, Apps, and Ports.",
-          "ru": "Прежняя вкладка «Приложения» теперь называется «Защита» и разделена на три режима: Tun, Apps и Ports."
-        },
-        {
-          "en": "Ports rules apply immediately on Save and are restored automatically on boot.",
-          "ru": "Правила скрытия портов применяются сразу после сохранения и автоматически восстанавливаются после загрузки устройства."
-        },
-        {
-          "en": "vpnhide-ports.zip is now included in the release/update pipeline with Magisk/KernelSU update metadata.",
-          "ru": "vpnhide-ports.zip теперь включён в пайплайн релизов и обновлений с метаданными для Magisk/KernelSU."
-        }
-      ]
-    },
     {
       "type": "fixed",
       "items": [
         {
-          "en": "Fixed LinkProperties filtering so VPN routes are stripped more reliably from app-visible network snapshots.",
-          "ru": "Исправлена фильтрация LinkProperties: VPN-маршруты теперь надёжнее удаляются из сетевых snapshot'ов, видимых приложению."
-        },
+          "en": "Magisk versions before v28 failed to install vpnhide-ports and vpnhide-kmod with an unpack error — restored the META-INF/com/google/android/{update-binary,updater-script} entries the older managers expect.",
+          "ru": "Magisk до v28 не мог установить vpnhide-ports и vpnhide-kmod из-за ошибки распаковки — вернул файлы META-INF/com/google/android/{update-binary,updater-script}, которые требуются старыми менеджерами."
+        }
+      ]
+    },
+    {
+      "type": "added",
+      "items": [
         {
-          "en": "Fixed SIOCGIFCONF filtering on some Android 12/13 5.10 kernels where the previous hook could succeed but never fire.",
-          "ru": "Исправлена фильтрация SIOCGIFCONF на некоторых ядрах Android 12/13 5.10, где предыдущий хук мог успешно зарегистрироваться, но никогда не срабатывал."
-        },
-        {
-          "en": "Fixed debug log collection so app logcat entries are captured reliably on devices where logcat via su misses them.",
-          "ru": "Исправлен сбор отладочного лога: записи logcat самого приложения теперь надёжно попадают в архив на устройствах, где запуск logcat через su их пропускал."
+          "en": "Detect gb.sweetlifecl as a Russian-vendor package in the app picker filter, so it shows up under the Russian-only filter alongside other domestic apps.",
+          "ru": "Пакет gb.sweetlifecl распознаётся как российский в фильтре выбора приложений и показывается в режиме «только российские» вместе с другими отечественными приложениями."
         }
       ]
     }
   ],
   "history": [
+    {
+      "version": "0.6.0",
+      "sections": [
+        {
+          "type": "added",
+          "items": [
+            {
+              "en": "App hiding mode in Protection — hide selected apps from selected observer apps at the PackageManager level. Observer apps can no longer list, resolve, or query hidden apps.",
+              "ru": "Режим скрытия приложений в разделе «Защита» — скрывайте выбранные приложения от выбранных приложений-наблюдателей на уровне PackageManager. Наблюдатели больше не могут перечислять, находить или запрашивать скрытые приложения."
+            },
+            {
+              "en": "Ports hiding mode plus new vpnhide-ports.zip module — block selected apps from reaching 127.0.0.1 / ::1 ports to hide locally running VPN/proxy daemons (Clash, sing-box, V2Ray, Happ, etc.).",
+              "ru": "Режим скрытия портов и новый модуль vpnhide-ports.zip — блокируйте выбранным приложениям доступ к портам 127.0.0.1 / ::1, чтобы скрыть локально работающие VPN/прокси-демоны (Clash, sing-box, V2Ray, Happ и т. д.)."
+            },
+            {
+              "en": "Ports module integration in the dashboard — shows install state, active rules, observer count, and version mismatch/update warnings.",
+              "ru": "Интеграция модуля скрытия портов в панель — показывает статус установки, активность правил, число наблюдателей и предупреждения о несовпадении версий или доступных обновлениях."
+            }
+          ]
+        },
+        {
+          "type": "changed",
+          "items": [
+            {
+              "en": "The old Apps tab is now Protection, split into three modes: Tun, Apps, and Ports.",
+              "ru": "Прежняя вкладка «Приложения» теперь называется «Защита» и разделена на три режима: Tun, Apps и Ports."
+            },
+            {
+              "en": "Ports rules apply immediately on Save and are restored automatically on boot.",
+              "ru": "Правила скрытия портов применяются сразу после сохранения и автоматически восстанавливаются после загрузки устройства."
+            },
+            {
+              "en": "vpnhide-ports.zip is now included in the release/update pipeline with Magisk/KernelSU update metadata.",
+              "ru": "vpnhide-ports.zip теперь включён в пайплайн релизов и обновлений с метаданными для Magisk/KernelSU."
+            }
+          ]
+        },
+        {
+          "type": "fixed",
+          "items": [
+            {
+              "en": "Fixed LinkProperties filtering so VPN routes are stripped more reliably from app-visible network snapshots.",
+              "ru": "Исправлена фильтрация LinkProperties: VPN-маршруты теперь надёжнее удаляются из сетевых snapshot'ов, видимых приложению."
+            },
+            {
+              "en": "Fixed SIOCGIFCONF filtering on some Android 12/13 5.10 kernels where the previous hook could succeed but never fire.",
+              "ru": "Исправлена фильтрация SIOCGIFCONF на некоторых ядрах Android 12/13 5.10, где предыдущий хук мог успешно зарегистрироваться, но никогда не срабатывал."
+            },
+            {
+              "en": "Fixed debug log collection so app logcat entries are captured reliably on devices where logcat via su misses them.",
+              "ru": "Исправлен сбор отладочного лога: записи logcat самого приложения теперь надёжно попадают в архив на устройствах, где запуск logcat через su их пропускал."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "0.5.3",
       "sections": [
