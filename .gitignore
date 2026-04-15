@@ -17,6 +17,9 @@ lsposed/keystore.properties
 lsposed/app/src/main/jniLibs/
 lsposed/native/target/
 
+# Portshide (iptables module)
+portshide/vpnhide-ports.zip
+
 # Kmod (kernel module)
 kmod/*.o
 kmod/*.mod

@@ -24,6 +24,10 @@ sed -i "s/^versionCode=.*/versionCode=${VERSION_CODE}/" kmod/module/module.prop
 sed -i "s/^version=.*/version=v${VERSION}/" zygisk/module/module.prop
 sed -i "s/^versionCode=.*/versionCode=${VERSION_CODE}/" zygisk/module/module.prop
 
+# portshide module.prop
+sed -i "s/^version=.*/version=v${VERSION}/" portshide/module/module.prop
+sed -i "s/^versionCode=.*/versionCode=${VERSION_CODE}/" portshide/module/module.prop
+
 # zygisk Cargo.toml (first version = line only)
 sed -i '0,/^version = ".*"/s//version = "'"${VERSION}"'"/' zygisk/Cargo.toml
 
@@ -37,6 +41,7 @@ sed -i '0,/^version = ".*"/s//version = "'"${VERSION}"'"/' lsposed/native/Cargo.
 echo "Updated:"
 echo "  kmod/module/module.prop"
 echo "  zygisk/module/module.prop"
+echo "  portshide/module/module.prop"
 echo "  zygisk/Cargo.toml"
 echo "  lsposed/app/build.gradle.kts"
 echo "  lsposed/native/Cargo.toml"

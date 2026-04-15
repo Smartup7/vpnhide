@@ -69,7 +69,7 @@ sealed interface JavaResult {
     data object HooksInactive : JavaResult
 }
 
-private enum class NativeModuleKind { Kmod, Zygisk }
+private enum class NativeModuleKind { Kmod, Zygisk, Ports }
 
 private sealed interface LsposedRuntime {
     data object Inactive : LsposedRuntime
@@ -103,6 +103,7 @@ internal data class DashboardState(
     val kmod: ModuleState,
     val zygisk: ModuleState,
     val lsposed: LsposedState,
+    val ports: ModuleState,
     val nativeInstallRecommendation: NativeInstallRecommendation?,
     val protection: ProtectionCheck,
     val issues: List<String>,
@@ -166,6 +167,7 @@ internal fun loadDashboardState(
                     when (kind) {
                         NativeModuleKind.Kmod -> R.string.dashboard_issue_kmod_version_mismatch
                         NativeModuleKind.Zygisk -> R.string.dashboard_issue_zygisk_version_mismatch
+                        NativeModuleKind.Ports -> R.string.dashboard_issue_ports_version_mismatch
                     },
                     moduleVersion,
                     appVersion,
@@ -177,6 +179,7 @@ internal fun loadDashboardState(
                     when (kind) {
                         NativeModuleKind.Kmod -> R.string.dashboard_issue_update_kmod
                         NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_zygisk
+                        NativeModuleKind.Ports -> R.string.dashboard_issue_update_ports
                     },
                     moduleVersion,
                     appVersion,
@@ -188,6 +191,7 @@ internal fun loadDashboardState(
                     when (kind) {
                         NativeModuleKind.Kmod -> R.string.dashboard_issue_update_app_for_kmod
                         NativeModuleKind.Zygisk -> R.string.dashboard_issue_update_app_for_zygisk
+                        NativeModuleKind.Ports -> R.string.dashboard_issue_update_app_for_ports
                     },
                     moduleVersion,
                     appVersion,
@@ -422,6 +426,21 @@ internal fun loadDashboardState(
             ModuleState.NotInstalled
         }
     Log.i(TAG, "zygisk: $zygisk (heartbeatBootId=$zygiskBootId currentBootId=${currentBootId.trim()})")
+
+    // ports (iptables-based loopback blocker)
+    val (portsInstalled, portsVersion) = parseModuleProp(PORTS_MODULE_DIR)
+    val portsObserverCount =
+        if (portsInstalled) countTargets(PORTS_OBSERVERS_FILE) else 0
+    val (_, portsChainExists) = suExec("iptables -L vpnhide_out -n 2>/dev/null >/dev/null && echo 1 || echo 0")
+    val portsActive = portsInstalled && portsChainExists.trim() == "1"
+    val ports: ModuleState =
+        if (portsInstalled) {
+            ModuleState.Installed(portsVersion, portsActive, portsObserverCount)
+        } else {
+            ModuleState.NotInstalled
+        }
+    Log.i(TAG, "ports: $ports")
+
     val nativeInstallRecommendation =
         if (kmod is ModuleState.NotInstalled && zygisk is ModuleState.NotInstalled) {
             buildNativeInstallRecommendation()
@@ -547,9 +566,15 @@ internal fun loadDashboardState(
     if (zygisk is ModuleState.Installed && zygisk.version != null && normalizeVersion(zygisk.version) != normalizeVersion(appVersion)) {
         issues += buildModuleVersionIssue(NativeModuleKind.Zygisk, zygisk.version, appVersion)
     }
+    if (ports is ModuleState.Installed && ports.version != null && normalizeVersion(ports.version) != normalizeVersion(appVersion)) {
+        issues += buildModuleVersionIssue(NativeModuleKind.Ports, ports.version, appVersion)
+    }
     val totalTargets = lsposedTargetCount + kmodTargetCount + zygiskTargetCount
     if (totalTargets == 0) {
         issues += res.getString(R.string.dashboard_issue_no_targets)
+    }
+    if (ports is ModuleState.Installed && ports.targetCount == 0) {
+        issues += res.getString(R.string.dashboard_issue_ports_no_observers)
     }
     if (lsposed is LsposedState.Active) {
         val runningVersion = lsposed.version
@@ -601,6 +626,7 @@ internal fun loadDashboardState(
         kmod = kmod,
         zygisk = zygisk,
         lsposed = lsposed,
+        ports = ports,
         nativeInstallRecommendation = nativeInstallRecommendation,
         protection = protection,
         issues = issues,

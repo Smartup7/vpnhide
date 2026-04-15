@@ -37,7 +37,7 @@ fun ProtectionScreen(
         when (mode) {
             ProtectionMode.VpnTargets -> AppsHelpDialog(onDismiss = onDismissHelp)
             ProtectionMode.AppHiding -> AppHidingHelpDialog(onDismiss = onDismissHelp)
-            ProtectionMode.PortHiding -> onDismissHelp()
+            ProtectionMode.PortHiding -> PortsHidingHelpDialog(onDismiss = onDismissHelp)
         }
     }
 
@@ -66,7 +66,12 @@ fun ProtectionScreen(
             }
 
             ProtectionMode.PortHiding -> {
-                ComingSoonPlaceholder()
+                PortsHidingScreen(
+                    searchQuery = searchQuery,
+                    showSystem = showSystem,
+                    showRussianOnly = showRussianOnly,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -99,19 +104,5 @@ private fun ProtectionModeSwitcher(
                 Text(stringResource(labelRes))
             }
         }
-    }
-}
-
-@Composable
-private fun ComingSoonPlaceholder() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.port_hiding_coming_soon),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

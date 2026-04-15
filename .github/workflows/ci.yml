@@ -174,8 +174,28 @@ jobs:
           path: vpnhide.apk
           if-no-files-found: error
 
+  portshide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package ports module zip
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq zip >/dev/null
+          echo "updateJson=https://raw.githubusercontent.com/okhsunrog/vpnhide/main/update-json/update-ports.json" >> portshide/module/module.prop
+          cd portshide
+          ./build-zip.sh
+          mv vpnhide-ports.zip "$GITHUB_WORKSPACE/vpnhide-ports.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpnhide-ports
+          path: vpnhide-ports.zip
+          if-no-files-found: error
+
   release:
-    needs: [kmod, zygisk, lsposed]
+    needs: [kmod, zygisk, lsposed, portshide]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
