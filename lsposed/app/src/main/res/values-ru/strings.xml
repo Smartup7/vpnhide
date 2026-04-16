@@ -117,6 +117,12 @@
     <string name="btn_export_debug_running">Собираю отладочную информацию&#8230;</string>
     <string name="btn_save_debug">Сохранить</string>
     <string name="btn_share_debug">Поделиться</string>
+    <string name="logcat_card_title">Полный системный logcat</string>
+    <string name="logcat_card_description">Записывает неотфильтрованные логи из всех буферов (main/system/crash/events/radio) для диагностики проблем, которые не видны в стандартных проверках. Начните запись, воспроизведите баг, затем остановите.</string>
+    <string name="logcat_btn_start">Начать запись</string>
+    <string name="logcat_btn_stop">Остановить и сохранить</string>
+    <string name="logcat_btn_share_last">Последний (%1$s)</string>
+    <string name="logcat_recording_status">● Запись · %1$s · %2$s</string>
     <string name="summary_running">Выполняется&#8230;</string>
     <string name="summary_format">%1$d/%2$d пройдено</string>
     <string name="btn_run_all">Запустить все проверки</string>

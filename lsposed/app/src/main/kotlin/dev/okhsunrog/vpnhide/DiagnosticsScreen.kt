@@ -14,8 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -199,6 +201,10 @@ fun DiagnosticsScreen(
 
         Spacer(Modifier.height(16.dp))
 
+        LogcatRecordCard()
+
+        Spacer(Modifier.height(16.dp))
+
         // Collect button
         if (debugZipFile == null) {
             Button(
@@ -277,6 +283,149 @@ fun DiagnosticsScreen(
 
         Spacer(Modifier.height(16.dp))
     }
+}
+
+@Composable
+private fun LogcatRecordCard() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val state by LogcatRecorder.state.collectAsState()
+
+    // Tick every second while recording so the elapsed counter updates
+    // even when sizeBytes happens to hold steady.
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(state) {
+        if (state is LogcatRecorder.State.Recording) {
+            while (true) {
+                nowMs = System.currentTimeMillis()
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.logcat_card_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.logcat_card_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            when (val s = state) {
+                is LogcatRecorder.State.Recording -> {
+                    val elapsed = (nowMs - s.startMs).coerceAtLeast(0L) / 1000
+                    Text(
+                        text =
+                            stringResource(
+                                R.string.logcat_recording_status,
+                                formatElapsed(elapsed),
+                                formatSize(s.sizeBytes),
+                            ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            scope.launch { LogcatRecorder.stop() }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Default.Stop,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.logcat_btn_stop))
+                    }
+                }
+
+                is LogcatRecorder.State.Stopped -> {
+                    val last = s.lastFile
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                scope.launch { LogcatRecorder.start(context) }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                Icons.Default.FiberManualRecord,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.logcat_btn_start))
+                        }
+                        if (last != null && last.exists()) {
+                            OutlinedButton(
+                                onClick = {
+                                    val uri =
+                                        FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            last,
+                                        )
+                                    val intent =
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                    context.startActivity(Intent.createChooser(intent, null))
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text =
+                                        stringResource(
+                                            R.string.logcat_btn_share_last,
+                                            formatSize(last.length()),
+                                        ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatElapsed(seconds: Long): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%d:%02d".format(m, s)
+}
+
+private fun formatSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return "%.1f KB".format(kb)
+    val mb = kb / 1024.0
+    return "%.1f MB".format(mb)
 }
 
 @Composable

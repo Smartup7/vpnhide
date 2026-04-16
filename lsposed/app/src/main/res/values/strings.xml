@@ -64,6 +64,12 @@
     <string name="btn_export_debug_running">Collecting debug info&#8230;</string>
     <string name="btn_save_debug">Save</string>
     <string name="btn_share_debug">Share</string>
+    <string name="logcat_card_title">Full system logcat</string>
+    <string name="logcat_card_description">Records unfiltered logs from all buffers (main/system/crash/events/radio) for debugging issues that aren\'t visible in the standard checks. Start recording, reproduce the bug, then stop.</string>
+    <string name="logcat_btn_start">Start recording</string>
+    <string name="logcat_btn_stop">Stop and save</string>
+    <string name="logcat_btn_share_last">Share last (%1$s)</string>
+    <string name="logcat_recording_status">● Recording · %1$s · %2$s</string>
     <string name="badge_pass">PASS</string>
     <string name="badge_fail">FAIL</string>
     <string name="badge_info">INFO</string>
