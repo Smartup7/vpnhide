@@ -4,13 +4,15 @@ Most users should download pre-built modules from [Releases](https://github.com/
 
 ## Quick build with DDK (recommended)
 
-The easiest way to build is using the same DDK Docker images that CI uses. No kernel source clone, no toolchain setup.
+The easiest way to build is using the same DDK container images that CI uses. No kernel source clone, no toolchain setup.
+
+### Docker
 
 ```bash
 # Pick your GKI generation (see "Identifying your GKI generation" below)
 KMI=android14-6.1
 
-# Build the kernel module
+# Build the kernel module (run from repo root)
 docker run --rm -v $(pwd)/kmod:/work \
     ghcr.io/ylarod/ddk-min:${KMI}-20260313 sh -c "
     CLANG=\$(echo /opt/ddk/clang/clang-r*/bin) && \
@@ -28,6 +30,35 @@ docker run --rm -v $(pwd)/kmod:/work \
 cp kmod/vpnhide_kmod.ko kmod/module/
 (cd kmod/module && zip -qr ../../vpnhide-kmod.zip .)
 ```
+
+### Podman (rootless + SELinux)
+
+On Fedora / RHEL-family systems with rootless Podman, the `docker run` above needs two extra flags:
+
+- `--userns=keep-id` — maps the host UID into the container so the bind-mounted `/work` stays writable. Without it the build fails with `mkdir: cannot create directory '/work/.tmp_*': Permission denied`.
+- `:Z` on the `-v` mount — SELinux relabel for the bind mount.
+
+```bash
+KMI=android14-6.1
+
+podman run --rm --userns=keep-id -v "$(pwd)/kmod:/work:Z" \
+    ghcr.io/ylarod/ddk-min:${KMI}-20260313 sh -c '
+    CLANG=$(echo /opt/ddk/clang/clang-r*/bin) && \
+    make -C /opt/ddk/kdir/'${KMI}' M=/work \
+        ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+        CC=$CLANG/clang LD=$CLANG/ld.lld \
+        AR=$CLANG/llvm-ar NM=$CLANG/llvm-nm \
+        OBJCOPY=$CLANG/llvm-objcopy \
+        OBJDUMP=$CLANG/llvm-objdump \
+        STRIP=$CLANG/llvm-strip \
+        CROSS_COMPILE=aarch64-linux-gnu- \
+        modules'
+
+cp kmod/vpnhide_kmod.ko kmod/module/
+(cd kmod/module && zip -qr ../../vpnhide-kmod.zip .)
+```
+
+On non-SELinux distros with rootful Podman, the plain `docker run` command above works with just `s/docker/podman/`.
 
 ## Local build with kernel source
 
