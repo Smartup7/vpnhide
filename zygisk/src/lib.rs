@@ -30,6 +30,7 @@ mod filter;
 mod hooks;
 mod shadowhook;
 
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::sync::Once;
 
 use jni::JNIEnv;
@@ -132,12 +133,20 @@ impl ZygiskModule for VpnHide {
 
     fn on_load(&self, api: ZygiskApi<'_, V2>, _env: JNIEnv<'_>) {
         init_logger();
-        let dir_fd = api.get_module_dir();
-        CACHED_TARGETS.get_or_init(|| load_targets_from_dir_fd(dir_fd));
+        // Zygisksu returns a raw fd to /data/adb/modules/<id> that we own.
+        // Wrap it in OwnedFd so the drop at the end of this function closes
+        // it before zygote forks any app. If we leak it, every app forked
+        // after us inherits an fd pointing inside /data/adb/ — and apps
+        // that scan /proc/self/fd for root-managed paths (e.g. Ozon's
+        // anti-tamper SDK) detect it and refuse to run, even though our
+        // .so is dlclosed for non-target apps.
+        let dir_fd = unsafe { OwnedFd::from_raw_fd(api.get_module_dir()) };
+        CACHED_TARGETS.get_or_init(|| load_targets_from_dir_fd(dir_fd.as_raw_fd()));
         debug!(
             "on_load: {} targets cached",
             CACHED_TARGETS.get().map_or(0, |v| v.len())
         );
+        // dir_fd drops here → closed before any app fork.
     }
 
     fn pre_app_specialize<'a>(
